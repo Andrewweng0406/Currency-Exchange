@@ -111,9 +111,7 @@ These commands will be added in later phases:
 
 ```bash
 python scripts/run_backtest_phase3.py
-python scripts/train_models.py --horizon 1d
-python scripts/train_models.py --horizon 5d
-python scripts/train_models.py --horizon 20d
+python scripts/train_models.py --horizon all
 python scripts/backtest_strategy.py
 python scripts/send_line_test.py
 uvicorn app.api.main:app --reload
@@ -153,7 +151,23 @@ It currently reports:
 
 The prediction-based Strategy C is intentionally not simulated yet because real model predictions and risk scores start in later phases. No synthetic prediction signals are used.
 
-## 11. Design Guardrails
+## 11. Phase 4 Models
+
+Current model command:
+
+```bash
+python scripts/train_models.py --horizon all
+```
+
+For each horizon (`1d`, `5d`, `20d`) it trains:
+
+- Logistic Regression as an interpretable baseline.
+- XGBoost for nonlinear relationships.
+- A time-series direction baseline that uses USD/TWD momentum and historical up-rate behavior.
+
+The ensemble weights are computed from walk-forward validation metrics rather than fixed by hand. Model artifacts are saved locally under `models/artifacts/` and are intentionally not committed. Latest predictions and model performance are persisted to the database for monitoring.
+
+## 12. Design Guardrails
 
 - No random train/test split for time-series modeling.
 - No look-ahead bias: macro values must be joined by release timestamp.
