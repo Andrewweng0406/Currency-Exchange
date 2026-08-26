@@ -175,3 +175,37 @@ The ensemble weights are computed from walk-forward validation metrics rather th
 - Poor model performance lowers ensemble weight.
 - Missing provider data lowers confidence.
 - Exchange recommendations are staged percentages, not all-or-nothing trading calls.
+
+## 12. Phase 5-7 Risk, Exchange Planner, And LINE
+
+Current decision command:
+
+```bash
+python scripts/generate_decision.py
+```
+
+Current LINE dry-run command:
+
+```bash
+python scripts/send_line_report.py
+```
+
+To send through LINE Messaging API after setting `.env`:
+
+```bash
+python scripts/send_line_report.py --send
+```
+
+Implemented:
+
+- TWD Risk Score from model probabilities, USD/TWD momentum, DXY, rates, Asia FX, global risk-off, and data quality.
+- Exchange Opportunity Score from USD/TWD percentile over 20D, 60D, 120D, and 252D.
+- Market regimes: `RISK_ON`, `RISK_OFF`, `USD_STRONG`, `USD_WEAK`, `HIGH_VOL`, `LOW_VOL`, `TWD_IDIOSYNCRATIC`.
+- Exchange planner outputs `WAIT`, `EXCHANGE_25_PERCENT`, `EXCHANGE_50_PERCENT`, `EXCHANGE_75_PERCENT`, or `EXCHANGE_100_PERCENT`.
+- LINE Messaging API client, Traditional Chinese report formatting, alert candidates, and dedupe logic.
+
+Required from you before real LINE sending:
+
+- `LINE_CHANNEL_ACCESS_TOKEN`
+- `LINE_USER_ID`
+- Later: the exact bank your family uses, if not Bank of Taiwan/Land Bank fallback.

@@ -1,6 +1,15 @@
 risk_score:
   scale_min: 0
   scale_max: 100
+  weights:
+    prediction_5d: 0.32
+    prediction_20d: 0.18
+    recent_usdtwd_momentum: 0.14
+    dxy_momentum: 0.10
+    rates_pressure: 0.08
+    asia_fx_pressure: 0.08
+    global_risk_off: 0.05
+    data_quality_penalty: 0.05
   bands:
     strong_twd: [0, 20]
     moderately_favorable: [21, 40]
@@ -10,11 +19,42 @@ risk_score:
 
 exchange_recommendation:
   actions: [WAIT, EXCHANGE_25_PERCENT, EXCHANGE_50_PERCENT, EXCHANGE_75_PERCENT, EXCHANGE_100_PERCENT]
+  default_profile:
+    monthly_usd_need: 2500
+    target_usd_amount: 10000
+    usd_already_held: 0
+    twd_available: null
+    next_payment_date: null
   deadline_days:
     flexible: 30
     elevated: 14
     urgent: 7
     critical: 3
+  rules:
+    - min_deadline_risk: 90
+      recommendation: EXCHANGE_100_PERCENT
+    - min_deadline_risk: 75
+      min_risk_score: 45
+      recommendation: EXCHANGE_75_PERCENT
+    - min_risk_score: 80
+      recommendation: EXCHANGE_75_PERCENT
+    - min_risk_score: 65
+      recommendation: EXCHANGE_50_PERCENT
+    - min_opportunity_score: 80
+      max_risk_score: 55
+      recommendation: EXCHANGE_50_PERCENT
+    - min_risk_score: 45
+      recommendation: EXCHANGE_25_PERCENT
+    - min_opportunity_score: 65
+      recommendation: EXCHANGE_25_PERCENT
+    - recommendation: WAIT
+
+opportunity_score:
+  weights:
+    percentile_20d: 0.20
+    percentile_60d: 0.25
+    percentile_120d: 0.25
+    percentile_252d: 0.30
 
 alerts:
   dedupe_window_minutes: 60
