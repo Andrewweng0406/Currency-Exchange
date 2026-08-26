@@ -230,6 +230,7 @@ Implemented:
 - LINE Messaging API client, Traditional Chinese report formatting, alert candidates, and dedupe logic.
 - Webhook helper endpoint for discovering `LINE_USER_ID`.
 - Exchange plans are persisted to the `exchange_plans` table.
+- Immediate alert candidates: TWD depreciation warning, sudden FX move, good exchange opportunity, and macro event notice.
 
 Required from you before real LINE sending:
 

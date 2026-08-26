@@ -30,6 +30,7 @@ def main() -> None:
     inputs = default_inputs()
     exchange = recommend_exchange(inputs, risk.twd_risk_score, risk.opportunity_score)
     predictions = _predictions(session)
+    upcoming = upcoming_event_risk(session)
     bank = session.execute(select(BankRate.spot_selling).order_by(BankRate.observed_at_utc.desc()).limit(1)).scalar_one_or_none()
     message = daily_report(
         current_usdtwd=float(latest["USDTWD_CLOSE"]),
@@ -39,9 +40,13 @@ def main() -> None:
         risk=risk,
         exchange=exchange,
         exchange_inputs=inputs,
-        upcoming_events=upcoming_event_risk(session),
+        upcoming_events=upcoming,
     )
-    alerts = [candidate for candidate in generate_alerts(risk, predictions) if should_send_alert(session, candidate)]
+    alerts = [
+        candidate
+        for candidate in generate_alerts(risk, predictions, latest.to_dict(), upcoming)
+        if should_send_alert(session, candidate)
+    ]
     if dry_run:
         print(message)
         print("\n--- ALERTS ---")

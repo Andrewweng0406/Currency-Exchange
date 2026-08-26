@@ -22,7 +22,12 @@ class AlertCandidate:
     risk_score: int | None = None
 
 
-def generate_alerts(risk: RiskSnapshot, predictions: dict[str, dict[str, float | None]]) -> list[AlertCandidate]:
+def generate_alerts(
+    risk: RiskSnapshot,
+    predictions: dict[str, dict[str, float | None]],
+    latest_features: dict | None = None,
+    upcoming_events: list[dict] | None = None,
+) -> list[AlertCandidate]:
     policy = risk_policy()["alerts"]
     alerts = []
     prob_5d = predictions.get("5d", {}).get("prob_up")
@@ -37,6 +42,22 @@ def generate_alerts(risk: RiskSnapshot, predictions: dict[str, dict[str, float |
                 risk_score=risk.twd_risk_score,
             )
         )
+    latest_features = latest_features or {}
+    fx_return = latest_features.get("USDTWD_RETURN_1D")
+    fx_vol = latest_features.get("USDTWD_VOLATILITY_20D")
+    if fx_return is not None and fx_vol:
+        move_z = abs(float(fx_return)) / max(float(fx_vol), 0.0001)
+        if move_z >= policy["sudden_fx_move"]["rolling_zscore_min"]:
+            alerts.append(
+                AlertCandidate(
+                    alert_type="SUDDEN_FX_MOVE",
+                    severity="HIGH",
+                    title="⚠️ USD/TWD 快速波動",
+                    body=f"USD/TWD 1日變動：\n{float(fx_return):+.2%}\n\nRolling move z-score：約 {move_z:.1f}",
+                    dedupe_key="SUDDEN_FX_MOVE",
+                    risk_score=risk.twd_risk_score,
+                )
+            )
     if risk.opportunity_score >= policy["good_exchange_opportunity"]["opportunity_score_min"]:
         alerts.append(
             AlertCandidate(
@@ -45,6 +66,17 @@ def generate_alerts(risk: RiskSnapshot, predictions: dict[str, dict[str, float |
                 title="🟢 美元換匯機會",
                 body=f"Opportunity Score：\n{risk.opportunity_score}/100\n\n目前匯率處於相對有利區間。",
                 dedupe_key="GOOD_EXCHANGE_OPPORTUNITY",
+                risk_score=risk.twd_risk_score,
+            )
+        )
+    for event in (upcoming_events or [])[:3]:
+        alerts.append(
+            AlertCandidate(
+                alert_type="MACRO_EVENT",
+                severity="MEDIUM",
+                title="⚠️ 匯率重大事件",
+                body=f"{event.get('event_name', 'Upcoming Event')}\n\n發布：\n{event.get('release_time_utc', 'N/A')}\n\n可能造成 USD/TWD 波動增加。",
+                dedupe_key=f"MACRO_EVENT:{event.get('event_name')}:{event.get('release_time_utc')}",
                 risk_score=risk.twd_risk_score,
             )
         )

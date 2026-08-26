@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.alerts.engine import AlertCandidate, persist_alert, should_send_alert
+from app.alerts.engine import AlertCandidate, generate_alerts, persist_alert, should_send_alert
 from app.database.schema import Base
 from app.exchange.planner import ExchangeInputs, ExchangeRecommendation
 from app.line.client import verify_line_signature
@@ -58,3 +58,25 @@ def test_line_signature_verification():
     signature = base64.b64encode(hmac.new(secret.encode(), body, hashlib.sha256).digest()).decode()
     assert verify_line_signature(body, signature, secret)
     assert not verify_line_signature(body, "bad", secret)
+
+
+def test_generate_sudden_fx_and_macro_alerts():
+    risk = RiskSnapshot(
+        "2026-01-01T00:00:00Z",
+        70,
+        20,
+        ["RISK_OFF"],
+        0.6,
+        [],
+        TailRiskSnapshot("5d", {"USD_TWD_UP_GT_1PCT": 0.1, "USD_TWD_UP_GT_2PCT": 0.02}, "test"),
+        CbcInterventionRisk("MEDIUM", True, ["test"]),
+    )
+    alerts = generate_alerts(
+        risk,
+        {"5d": {"prob_up": 0.5}},
+        {"USDTWD_RETURN_1D": 0.02, "USDTWD_VOLATILITY_20D": 0.004},
+        [{"event_name": "CPI", "release_time_utc": "2026-01-01T13:30:00+00:00"}],
+    )
+    types = {alert.alert_type for alert in alerts}
+    assert "SUDDEN_FX_MOVE" in types
+    assert "MACRO_EVENT" in types
