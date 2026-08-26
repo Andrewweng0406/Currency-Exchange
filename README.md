@@ -113,7 +113,7 @@ These commands will be added in later phases:
 python scripts/run_backtest_phase3.py
 python scripts/train_models.py --horizon all
 python scripts/backtest_strategy.py
-python scripts/send_line_test.py
+python scripts/send_line_report.py
 uvicorn app.api.main:app --reload
 streamlit run dashboard/main.py
 python scripts/run_scheduler.py
@@ -166,6 +166,20 @@ For each horizon (`1d`, `5d`, `20d`) it trains:
 - A time-series direction baseline that uses USD/TWD momentum and historical up-rate behavior.
 
 The ensemble weights are computed from walk-forward validation metrics rather than fixed by hand. Model artifacts are saved locally under `models/artifacts/` and are intentionally not committed. Latest predictions and model performance are persisted to the database for monitoring.
+
+Run strategy comparison:
+
+```bash
+python scripts/backtest_strategy.py
+```
+
+The current first-pass Strategy C uses real walk-forward 5D probabilities. It is intentionally conservative and not tuned to make the backtest look pretty. On the current local dataset, the 2023+ smoke comparison for monthly USD 10,000 needs produced:
+
+- Fixed day once: average rate 31.4851, worst rate 33.1858, maximum regret NT$31,617.
+- Equal tranches: average rate 31.4944, worst rate 32.9907, maximum regret NT$14,868.
+- Risk-based strategy: average rate 31.4820, worst rate 33.0361, maximum regret NT$18,209.
+
+This means the first-pass risk strategy slightly improved average cost versus fixed day and materially reduced maximum regret, but it did not dominate equal tranches on regret. This should be treated as an honest baseline, not a finished optimized policy.
 
 ## 12. Phase 5-7 Risk, Exchange Planner, And LINE
 
