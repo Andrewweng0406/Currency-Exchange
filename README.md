@@ -273,6 +273,7 @@ Useful endpoints:
 - `GET /health`
 - `GET /overview`
 - `GET /features/latest`
+- `GET /data-quality`
 - `GET /charts/usdtwd?limit=365`
 
 Start the dashboard:
@@ -291,6 +292,12 @@ Run operational readiness checks:
 
 ```bash
 python scripts/check_readiness.py
+```
+
+Audit data coverage and critical feature missingness:
+
+```bash
+python scripts/data_quality_report.py
 ```
 
 Import economic events from a manually prepared official-source CSV:

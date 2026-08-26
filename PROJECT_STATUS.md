@@ -2,7 +2,15 @@
 
 Last verified: 2026-08-26 America/Los_Angeles.
 
-Latest GitHub commit: `6c1d5a2 Add migrations explainability and profile configuration`.
+Latest committed baseline before this audit: `e5e51f7 Update verified project status`.
+
+## Session Update 2026-08-26
+
+- Added a Hua Nan Commercial Bank provider (`app/providers/hncb.py`) and made it the primary `bank` provider in `config/settings.yaml`, since that is the bank the user's family actually uses; Land Bank stays as the public fallback (Bank of Taiwan is still registered but no longer primary/fallback since the family doesn't bank there). Confirmed the JSON endpoint (`https://www.hncb.com.tw/hncb/rest/exRate/all`) once during development, then it became unreachable from this machine (same bot-mitigation pattern as Bank of Taiwan). On 2026-08-26 the full ingest succeeded through the fallback chain and persisted the latest bank quote from Land Bank, not Hua Nan. The exact Hua Nan spot-row field names are inferred from standard Taiwan bank rate-page conventions, not exhaustively verified against a captured spot response — worth double-checking against a real response once the endpoint is reachable again.
+- Fixed a `data-quality` report bug: the `features:daily_v1` coverage check was counting all rows in the `features` table regardless of `feature_set`, not just `daily_v1` rows. Now filters correctly.
+- Combined `_coverage()`'s three per-dataset queries (count/min/max) into one query.
+- Added `GET /data-quality` and `make data-quality` for data coverage/feature missingness audits.
+- Created `.env` from `.env.example` locally (not committed; still needs real values, see below).
 
 ## Completed And Verified
 
@@ -40,14 +48,17 @@ Latest GitHub commit: `6c1d5a2 Add migrations explainability and profile configu
 ## Latest Local Verification
 
 ```text
-pytest: 31 passed
+pytest: 35 passed
 readiness: core checks passed
 alembic current: 20260826_0001 (head)
+ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
+data-quality: DEGRADED due to CNH/TAIEX/TSMC historical coverage limits
 features: 2608 rows
 predictions: 3 rows
-fx_prices: 2628 rows
-market_data: 70472 rows
-foreign_flows: 264 rows
+fx_prices: 2630 rows
+market_data: 70479 rows
+foreign_flows: 265 rows
+latest bank quote: Land Bank fallback, USD spot selling 31.899 at 2026-08-26T23:40:01Z
 ```
 
 Docker build was not verified locally because Docker CLI is not installed on this machine.
@@ -70,8 +81,8 @@ CBC Intervention Risk: LOW (ESTIMATED)
 - `LINE_CHANNEL_ACCESS_TOKEN`
 - `LINE_USER_ID`
 - `LINE_CHANNEL_SECRET`
-- Exact bank your family uses for TWD to USD conversion.
-- Your real planning values:
+- ~~Exact bank your family uses for TWD to USD conversion~~ — resolved: Hua Nan Commercial Bank, wired up 2026-08-26.
+- Your real planning values (deferred by user for now, run `python scripts/configure_profile.py` when ready):
   - `MONTHLY_USD_NEED`
   - `NEXT_PAYMENT_DATE`
   - `TARGET_USD_AMOUNT`

@@ -13,8 +13,8 @@ providers:
   retry_attempts: 3
   retry_wait_seconds: 2
   bank:
-    name: Bank of Taiwan
-    provider: bot
+    name: Hua Nan Commercial Bank
+    provider: hncb
     fallback_provider: landbank
     currency: USD
   fred:

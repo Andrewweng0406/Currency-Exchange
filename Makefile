@@ -1,4 +1,4 @@
-.PHONY: install test ingest features train decision line-dry-run api dashboard strategy health readiness migrate profile
+.PHONY: install test ingest features train decision line-dry-run api dashboard strategy health readiness data-quality migrate profile
 
 install:
 	python3 -m venv .venv
@@ -36,6 +36,9 @@ health:
 
 readiness:
 	. .venv/bin/activate && python scripts/check_readiness.py
+
+data-quality:
+	. .venv/bin/activate && python scripts/data_quality_report.py
 
 migrate:
 	. .venv/bin/activate && alembic upgrade head

@@ -18,6 +18,7 @@ from app.providers.base import ProviderError, ProviderResult
 from app.providers.bot import BankOfTaiwanProvider
 from app.providers.cbc import TaiwanCentralBankProvider
 from app.providers.fred import FredCsvProvider
+from app.providers.hncb import HuaNanBankProvider
 from app.providers.landbank import LandBankProvider
 from app.providers.twse import TwseProvider
 from app.providers.yahoo import YahooFinanceProvider
@@ -84,7 +85,7 @@ def _ingest_bank_rates(session, provider) -> int:
 def _ingest_bank_with_fallback(session, provider_kwargs: dict) -> int:
     cfg = settings()
     bank_cfg = cfg["providers"].get("bank", {})
-    registry = {"bot": BankOfTaiwanProvider, "landbank": LandBankProvider}
+    registry = {"bot": BankOfTaiwanProvider, "landbank": LandBankProvider, "hncb": HuaNanBankProvider}
     primary_key = bank_cfg.get("provider", "bot")
     fallback_key = bank_cfg.get("fallback_provider", "landbank")
     primary = registry.get(primary_key, BankOfTaiwanProvider)(**provider_kwargs)

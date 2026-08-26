@@ -12,6 +12,7 @@ from app.database.session import make_session
 from app.economic_events.importer import upcoming_event_risk
 from app.exchange.planner import default_inputs, recommend_exchange
 from app.line.client import verify_line_signature
+from app.ops.data_quality import data_coverage_report
 from app.risk.scoring import latest_risk_snapshot
 
 app = FastAPI(title="TWD FX Monitor API", version="0.1.0")
@@ -58,6 +59,11 @@ def latest_features():
     features = load_feature_frame(session)
     row = features.iloc[-1].to_dict()
     return {key: _json_safe(value) for key, value in row.items()}
+
+
+@app.get("/data-quality")
+def data_quality():
+    return data_coverage_report(_session())
 
 
 @app.get("/charts/usdtwd")
