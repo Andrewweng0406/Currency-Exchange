@@ -265,6 +265,12 @@ Run model-health evaluation:
 python scripts/evaluate_model_health.py
 ```
 
+Run operational readiness checks:
+
+```bash
+python scripts/check_readiness.py
+```
+
 Import economic events from a manually prepared official-source CSV:
 
 ```bash

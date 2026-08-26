@@ -1,4 +1,4 @@
-.PHONY: install test ingest features train decision line-dry-run api dashboard strategy health
+.PHONY: install test ingest features train decision line-dry-run api dashboard strategy health readiness
 
 install:
 	python3 -m venv .venv
@@ -33,3 +33,6 @@ strategy:
 
 health:
 	. .venv/bin/activate && python scripts/evaluate_model_health.py
+
+readiness:
+	. .venv/bin/activate && python scripts/check_readiness.py
