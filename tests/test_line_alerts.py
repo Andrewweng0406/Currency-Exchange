@@ -7,7 +7,9 @@ from app.alerts.engine import AlertCandidate, persist_alert, should_send_alert
 from app.database.schema import Base
 from app.exchange.planner import ExchangeRecommendation
 from app.line.formatter import daily_report
+from app.risk.cbc import CbcInterventionRisk
 from app.risk.scoring import RiskSnapshot
+from app.risk.tail import TailRiskSnapshot
 
 
 def test_daily_report_contains_required_language():
@@ -16,7 +18,16 @@ def test_daily_report_contains_required_language():
         bank_spot_selling=31.47,
         changes={"1d": 0.003, "5d": 0.008, "20d": -0.012},
         predictions={"1d": {"prob_up": 0.61, "prob_down": 0.39}},
-        risk=RiskSnapshot("2026-01-01T00:00:00Z", 72, 40, ["RISK_OFF"], 0.74, [{"name": "dxy_momentum", "contribution": 7}]),
+        risk=RiskSnapshot(
+            "2026-01-01T00:00:00Z",
+            72,
+            40,
+            ["RISK_OFF"],
+            0.74,
+            [{"name": "dxy_momentum", "contribution": 7}],
+            TailRiskSnapshot("5d", {"USD_TWD_UP_GT_1PCT": 0.32, "USD_TWD_UP_GT_2PCT": 0.05}, "test"),
+            CbcInterventionRisk("LOW", True, ["test"]),
+        ),
         exchange=ExchangeRecommendation("EXCHANGE_50_PERCENT", 50, 7000, 3500, 45, []),
     )
     assert "USD/TWD 留學生換匯監控" in text

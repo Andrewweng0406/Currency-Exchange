@@ -4,7 +4,7 @@ Production-oriented USD/TWD probability forecasting and exchange risk management
 
 ## Current Status
 
-Phase 1 and Phase 2 foundation are implemented:
+Implemented:
 
 - Data-source audit in `DATA_SOURCES.md`.
 - SQLite local development database with PostgreSQL-ready SQLAlchemy models.
@@ -13,8 +13,7 @@ Phase 1 and Phase 2 foundation are implemented:
 - Conservative TWSE historical backfill script for TAIEX, 2330, and foreign-flow trading dates.
 - Daily feature engineering pipeline with technical, macro-market, Asia FX, TWSE, TSMC, and data-completeness features.
 - Unit tests for config, TWSE parsing, indicators, and feature building.
-
-Later phases will add feature engineering, walk-forward backtests, models, risk scoring, exchange planner, LINE alerts, dashboard, economic calendar, and monitoring.
+- Walk-forward backtesting, 1D/5D/20D ensemble models, risk scoring, exchange planner, LINE alerts, API, dashboard, scheduler, economic event import, model monitoring, and strategy comparison.
 
 ## 1. Create Python Environment
 
@@ -23,6 +22,12 @@ cd twd-fx-monitor
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+Or use:
+
+```bash
+make install
 ```
 
 ## 2. Configure Environment
@@ -60,6 +65,12 @@ The command exits with code `2` if one or more providers fail, but successful pr
 pytest
 ```
 
+Or:
+
+```bash
+make test
+```
+
 ## 5. Backfill TWSE History
 
 This uses official TWSE endpoints conservatively. It first backfills monthly TAIEX/2330 data, then uses known TAIEX trading dates to avoid unnecessary weekend/holiday requests for foreign-flow data.
@@ -88,7 +99,7 @@ The feature set is stored in the `features` table as `daily_v1`. It includes:
 
 ## 7. LINE Official Account Setup
 
-LINE Notify is discontinued and is not used. Later phases will use LINE Official Account plus LINE Messaging API.
+LINE Notify is discontinued and is not used. This project uses LINE Official Account plus LINE Messaging API.
 
 High-level setup:
 
@@ -256,6 +267,8 @@ event_name,release_time,previous,forecast,actual
 
 Consensus forecasts are not fabricated. If forecast data is unavailable from a reliable source, leave it blank and the surprise field will remain unavailable.
 
+An example file is available at `sample_data/economic_events.example.csv`.
+
 Run scheduler:
 
 ```bash
@@ -263,6 +276,17 @@ python scripts/run_scheduler.py
 ```
 
 Scheduled jobs use UTC internally and run ingestion, feature building, model training, monitoring, and LINE report sending.
+
+## Docker
+
+Build and run the API container:
+
+```bash
+docker build -t twd-fx-monitor .
+docker run --env-file .env -p 8000:8000 twd-fx-monitor
+```
+
+For production, use PostgreSQL and persistent storage. Model artifacts are local generated files and should be rebuilt or mounted in the production environment.
 
 ## 14. Design Guardrails
 

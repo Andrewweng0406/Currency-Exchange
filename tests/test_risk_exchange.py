@@ -3,7 +3,9 @@ from datetime import date
 import pandas as pd
 
 from app.exchange.planner import ExchangeInputs, payment_deadline_risk, recommend_exchange
+from app.risk.cbc import estimate_cbc_intervention_risk
 from app.risk.scoring import detect_regime, opportunity_score
+from app.risk.tail import estimate_tail_risk
 
 
 def test_payment_deadline_risk():
@@ -26,3 +28,15 @@ def test_detect_regime():
     regimes = detect_regime(pd.Series({"DXY_RETURN_20D": 0.02, "USDTWD_VOLATILITY_20D": 0.005, "VIX_CHANGE_5D": 5}))
     assert "USD_STRONG" in regimes
     assert "HIGH_VOL" in regimes
+
+
+def test_tail_risk_estimate():
+    frame = pd.DataFrame({"date": pd.date_range("2026-01-01", periods=30, tz="UTC"), "USDTWD_CLOSE": list(range(30, 60))})
+    tail = estimate_tail_risk(frame, horizon_days=5)
+    assert tail.probabilities["USD_TWD_UP_GT_1PCT"] > 0
+
+
+def test_cbc_intervention_risk_is_estimated():
+    risk = estimate_cbc_intervention_risk(pd.Series({"USDTWD_RETURN_5D": 0.02, "USDTWD_VOLATILITY_20D": 0.005, "CNH_RETURN_5D": 0.0}))
+    assert risk.estimated
+    assert risk.level in {"LOW", "MEDIUM", "HIGH"}

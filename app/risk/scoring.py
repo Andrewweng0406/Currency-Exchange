@@ -12,6 +12,8 @@ from app.backtesting.dataset import load_feature_frame
 from app.config import risk_policy
 from app.database.schema import Prediction
 from app.database.upsert import upsert_rows
+from app.risk.cbc import CbcInterventionRisk, estimate_cbc_intervention_risk
+from app.risk.tail import TailRiskSnapshot, estimate_tail_risk
 
 
 @dataclass(frozen=True)
@@ -22,6 +24,8 @@ class RiskSnapshot:
     regime: list[str]
     confidence: float
     contributors: list[dict[str, Any]]
+    tail_risk: TailRiskSnapshot
+    cbc_intervention_risk: CbcInterventionRisk
 
 
 def latest_risk_snapshot(session) -> RiskSnapshot:
@@ -50,6 +54,8 @@ def latest_risk_snapshot(session) -> RiskSnapshot:
         regime=detect_regime(latest),
         confidence=confidence,
         contributors=sorted(contributors, key=lambda item: abs(item["contribution"]), reverse=True)[:5],
+        tail_risk=estimate_tail_risk(features),
+        cbc_intervention_risk=estimate_cbc_intervention_risk(latest),
     )
     _apply_risk_to_latest_predictions(session, predictions, score_int)
     return snapshot
