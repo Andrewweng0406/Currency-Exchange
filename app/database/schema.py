@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -14,7 +14,7 @@ class TimestampMixin:
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     observed_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     source: Mapped[str] = mapped_column(String(80), index=True)
-    created_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class FxPrice(TimestampMixin, Base):

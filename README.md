@@ -4,13 +4,15 @@ Production-oriented USD/TWD probability forecasting and exchange risk management
 
 ## Current Status
 
-Phase 1 is implemented:
+Phase 1 and Phase 2 foundation are implemented:
 
 - Data-source audit in `DATA_SOURCES.md`.
 - SQLite local development database with PostgreSQL-ready SQLAlchemy models.
 - Real data ingestion for CBC USD/TWD close, Bank of Taiwan USD spot selling, FRED market/macro series, TWSE foreign flow, TAIEX, 2330, and Yahoo Finance supplemental market series.
 - Provider timeout/retry handling and structured JSON logs.
-- Initial unit tests for config and TWSE parsing.
+- Conservative TWSE historical backfill script for TAIEX, 2330, and foreign-flow trading dates.
+- Daily feature engineering pipeline with technical, macro-market, Asia FX, TWSE, TSMC, and data-completeness features.
+- Unit tests for config, TWSE parsing, indicators, and feature building.
 
 Later phases will add feature engineering, walk-forward backtests, models, risk scoring, exchange planner, LINE alerts, dashboard, economic calendar, and monitoring.
 
@@ -58,7 +60,33 @@ The command exits with code `2` if one or more providers fail, but successful pr
 pytest
 ```
 
-## 5. LINE Official Account Setup
+## 5. Backfill TWSE History
+
+This uses official TWSE endpoints conservatively. It first backfills monthly TAIEX/2330 data, then uses known TAIEX trading dates to avoid unnecessary weekend/holiday requests for foreign-flow data.
+
+```bash
+python scripts/backfill_twse_history.py --years 1 --sleep-seconds 0.5
+```
+
+The script is resumable: existing foreign-flow dates are skipped.
+
+## 6. Build Features
+
+```bash
+python scripts/build_features.py
+```
+
+The feature set is stored in the `features` table as `daily_v1`. It includes:
+
+- USD/TWD returns, rolling highs/lows, moving averages, volatility, RSI, ATR, Bollinger position, momentum, and rate of change.
+- DXY/broad USD index returns.
+- US 2Y/10Y changes and 2s10s spread.
+- VIX, S&P 500, Nasdaq, USD/CNH, USD/KRW, USD/JPY returns and volatility.
+- TAIEX, 2330, TSM ADR returns and TSMC volume z-score.
+- Foreign-flow 1D/3D/5D/20D sums and z-score.
+- `DATA_COMPLETENESS` and per-source missing-data flags for confidence logic.
+
+## 7. LINE Official Account Setup
 
 LINE Notify is discontinued and is not used. Later phases will use LINE Official Account plus LINE Messaging API.
 
@@ -77,12 +105,11 @@ LINE_USER_ID=...
 
 Never commit `.env`.
 
-## 6. Planned Commands
+## 8. Planned Commands
 
 These commands will be added in later phases:
 
 ```bash
-python scripts/build_features.py
 python scripts/train_models.py --horizon 1d
 python scripts/train_models.py --horizon 5d
 python scripts/train_models.py --horizon 20d
@@ -93,7 +120,7 @@ streamlit run dashboard/main.py
 python scripts/run_scheduler.py
 ```
 
-## 7. Production Deployment Notes
+## 9. Production Deployment Notes
 
 Use PostgreSQL in production, not SQLite. Store all secrets in environment variables. Run ingestion, prediction, alerting, and model monitoring as separate scheduled jobs so a data-provider outage does not stop the dashboard or erase historical data.
 
@@ -104,7 +131,7 @@ The production scheduler should use conservative data frequencies:
 - Yahoo supplemental market data: daily unless intraday alerting is explicitly enabled.
 - Macro/event data: aligned to official release timestamps.
 
-## 8. Design Guardrails
+## 10. Design Guardrails
 
 - No random train/test split for time-series modeling.
 - No look-ahead bias: macro values must be joined by release timestamp.
