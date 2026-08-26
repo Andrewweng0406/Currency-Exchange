@@ -2,6 +2,8 @@
 
 Last verified: 2026-08-26 America/Los_Angeles.
 
+Latest GitHub commit: `6c1d5a2 Add migrations explainability and profile configuration`.
+
 ## Completed And Verified
 
 - Data source audit: `DATA_SOURCES.md`.
@@ -38,8 +40,9 @@ Last verified: 2026-08-26 America/Los_Angeles.
 ## Latest Local Verification
 
 ```text
-pytest: 29 passed
+pytest: 31 passed
 readiness: core checks passed
+alembic current: 20260826_0001 (head)
 features: 2608 rows
 predictions: 3 rows
 fx_prices: 2628 rows
