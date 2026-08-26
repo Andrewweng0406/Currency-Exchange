@@ -167,15 +167,6 @@ For each horizon (`1d`, `5d`, `20d`) it trains:
 
 The ensemble weights are computed from walk-forward validation metrics rather than fixed by hand. Model artifacts are saved locally under `models/artifacts/` and are intentionally not committed. Latest predictions and model performance are persisted to the database for monitoring.
 
-## 12. Design Guardrails
-
-- No random train/test split for time-series modeling.
-- No look-ahead bias: macro values must be joined by release timestamp.
-- No fabricated consensus forecasts or Fed probabilities.
-- Poor model performance lowers ensemble weight.
-- Missing provider data lowers confidence.
-- Exchange recommendations are staged percentages, not all-or-nothing trading calls.
-
 ## 12. Phase 5-7 Risk, Exchange Planner, And LINE
 
 Current decision command:
@@ -209,3 +200,61 @@ Required from you before real LINE sending:
 - `LINE_CHANNEL_ACCESS_TOKEN`
 - `LINE_USER_ID`
 - Later: the exact bank your family uses, if not Bank of Taiwan/Land Bank fallback.
+
+## 13. Phase 8-10 API, Dashboard, Scheduler, Monitoring
+
+Start the API:
+
+```bash
+uvicorn app.api.main:app --reload --port 8000
+```
+
+Useful endpoints:
+
+- `GET /health`
+- `GET /overview`
+- `GET /features/latest`
+- `GET /charts/usdtwd?limit=365`
+
+Start the dashboard:
+
+```bash
+streamlit run dashboard/main.py
+```
+
+Run model-health evaluation:
+
+```bash
+python scripts/evaluate_model_health.py
+```
+
+Import economic events from a manually prepared official-source CSV:
+
+```bash
+python scripts/import_economic_events.py path/to/events.csv
+```
+
+Required CSV columns:
+
+```text
+event_name,release_time,previous,forecast,actual
+```
+
+Consensus forecasts are not fabricated. If forecast data is unavailable from a reliable source, leave it blank and the surprise field will remain unavailable.
+
+Run scheduler:
+
+```bash
+python scripts/run_scheduler.py
+```
+
+Scheduled jobs use UTC internally and run ingestion, feature building, model training, monitoring, and LINE report sending.
+
+## 14. Design Guardrails
+
+- No random train/test split for time-series modeling.
+- No look-ahead bias: macro values must be joined by release timestamp.
+- No fabricated consensus forecasts or Fed probabilities.
+- Poor model performance lowers ensemble weight.
+- Missing provider data lowers confidence.
+- Exchange recommendations are staged percentages, not all-or-nothing trading calls.
