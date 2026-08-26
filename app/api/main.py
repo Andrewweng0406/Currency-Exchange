@@ -9,6 +9,7 @@ from app.backtesting.dataset import load_feature_frame
 from app.config import settings
 from app.database.schema import BankRate, Prediction
 from app.database.session import make_session
+from app.economic_events.importer import upcoming_event_risk
 from app.exchange.planner import default_inputs, recommend_exchange
 from app.risk.scoring import latest_risk_snapshot
 
@@ -46,6 +47,7 @@ def overview():
         "risk": risk.__dict__,
         "exchange": exchange.__dict__,
         "predictions": predictions,
+        "upcoming_events": upcoming_event_risk(session),
     }
 
 
@@ -91,6 +93,8 @@ def _predictions(session):
                 "input_snapshot": json.loads(row.input_snapshot) if row.input_snapshot else {},
             },
         )
+        if out[row.horizon]["input_snapshot"].get("prediction_interval_80"):
+            out[row.horizon]["prediction_interval_80"] = out[row.horizon]["input_snapshot"]["prediction_interval_80"]
     return out
 
 

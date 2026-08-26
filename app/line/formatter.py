@@ -13,14 +13,18 @@ def daily_report(
     predictions: dict[str, dict[str, float | None]],
     risk: RiskSnapshot,
     exchange: ExchangeRecommendation,
+    upcoming_events: list[dict] | None = None,
 ) -> str:
     pred_lines = []
     for horizon in ["1d", "5d", "20d"]:
         item = predictions.get(horizon, {})
         up = _pct(item.get("prob_up"))
         down = _pct(item.get("prob_down"))
-        pred_lines.append(f"未來 {horizon.upper()}\n美元上漲：{up}\n台幣升值：{down}")
+        interval = item.get("prediction_interval_80") or {}
+        interval_text = _interval(interval)
+        pred_lines.append(f"未來 {horizon.upper()}\n美元上漲：{up}\n台幣升值：{down}\n預測報酬區間：{interval_text}")
     contributors = "\n".join(_contributor_line(item) for item in risk.contributors)
+    event_block = _event_block(upcoming_events or [])
     return (
         "🇹🇼 USD/TWD 留學生換匯監控\n\n"
         f"目前市場匯率：\n{current_usdtwd:.3f}\n\n"
@@ -50,6 +54,7 @@ def daily_report(
         "Recommendation：\n"
         f"{exchange.action.replace('_', ' ')}\n\n"
         f"建議目前先換：\n約 ${exchange.suggested_usd_to_exchange:,.0f}\n\n"
+        f"{event_block}"
         "此為機率與風險管理建議，不代表匯率一定會上漲或下跌。"
     )
 
@@ -75,6 +80,26 @@ def _num(value: float | None) -> str:
     if value is None:
         return "N/A"
     return f"{value:.3f}"
+
+
+def _interval(value: dict) -> str:
+    lower = value.get("lower")
+    upper = value.get("upper")
+    if lower is None or upper is None:
+        return "N/A"
+    return f"{lower:+.2%} ~ {upper:+.2%}"
+
+
+def _event_block(events: list[dict]) -> str:
+    if not events:
+        return ""
+    lines = ["━━━━━━━━━━", "", "📅 Upcoming Risk", ""]
+    for event in events[:3]:
+        lines.append(str(event.get("event_name", "Unknown Event")))
+        lines.append(f"發布：{event.get('release_time_utc', 'N/A')}")
+        lines.append("⚠️ High Impact")
+        lines.append("")
+    return "\n".join(lines) + "\n"
 
 
 def _risk_label(score: int) -> str:

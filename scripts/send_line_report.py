@@ -15,6 +15,7 @@ from app.config import settings
 from app.database.schema import BankRate, Prediction
 from app.database.session import make_session
 from app.exchange.planner import default_inputs, recommend_exchange
+from app.economic_events.importer import upcoming_event_risk
 from app.line.client import LineMessagingClient
 from app.line.formatter import daily_report
 from app.risk.scoring import latest_risk_snapshot
@@ -36,6 +37,7 @@ def main() -> None:
         predictions=predictions,
         risk=risk,
         exchange=exchange,
+        upcoming_events=upcoming_event_risk(session),
     )
     alerts = [candidate for candidate in generate_alerts(risk, predictions) if should_send_alert(session, candidate)]
     if dry_run:
@@ -56,7 +58,16 @@ def _predictions(session) -> dict[str, dict[str, float | None]]:
     ).scalars().all()
     out = {}
     for row in rows:
-        out.setdefault(row.horizon, {"prob_up": row.prob_up, "prob_down": row.prob_down, "confidence": row.confidence})
+        snapshot = json.loads(row.input_snapshot) if row.input_snapshot else {}
+        out.setdefault(
+            row.horizon,
+            {
+                "prob_up": row.prob_up,
+                "prob_down": row.prob_down,
+                "confidence": row.confidence,
+                "prediction_interval_80": snapshot.get("prediction_interval_80"),
+            },
+        )
     return out
 
 

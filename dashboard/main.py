@@ -41,11 +41,24 @@ st.subheader("Predictions")
 pred_cols = st.columns(3)
 for idx, horizon in enumerate(["1d", "5d", "20d"]):
     pred = pred_by_horizon.get(horizon)
+    interval = ""
+    if pred and pred.input_snapshot:
+        import json
+
+        snapshot = json.loads(pred.input_snapshot)
+        bounds = snapshot.get("prediction_interval_80") or {}
+        if bounds.get("lower") is not None and bounds.get("upper") is not None:
+            interval = f"80% {bounds['lower']:+.2%} to {bounds['upper']:+.2%}"
     pred_cols[idx].metric(
         horizon.upper(),
         f"USD ↑ {pred.prob_up:.0%}" if pred else "N/A",
-        f"Expected {pred.expected_return:+.2%}" if pred and pred.expected_return is not None else "",
+        interval or (f"Expected {pred.expected_return:+.2%}" if pred and pred.expected_return is not None else ""),
     )
+
+tail_cols = st.columns(3)
+tail_cols[0].metric("5D > +1%", f"{risk.tail_risk.probabilities.get('USD_TWD_UP_GT_1PCT', 0):.0%}")
+tail_cols[1].metric("5D > +2%", f"{risk.tail_risk.probabilities.get('USD_TWD_UP_GT_2PCT', 0):.0%}")
+tail_cols[2].metric("CBC Risk", f"{risk.cbc_intervention_risk.level}", "ESTIMATED")
 
 st.subheader("Exchange Planner")
 with st.form("planner"):

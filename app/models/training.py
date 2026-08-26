@@ -219,6 +219,11 @@ def train_horizon(session, horizon: str, min_train_years: int = 5) -> HorizonTra
         "classifiers": final_classifiers,
         "regressors": final_regressors,
         "classification_weights": weights,
+        "prediction_interval_80": {
+            "lower": float(frame[target_return].quantile(0.10)),
+            "upper": float(frame[target_return].quantile(0.90)),
+            "method": "historical_forward_return_quantiles",
+        },
         "scores": [asdict(score) for score in scores],
         "trained_at_utc": datetime.now(timezone.utc).isoformat(),
     }
@@ -292,6 +297,7 @@ def _persist_latest_prediction(session, frame: pd.DataFrame, artifact: dict[str,
     snapshot = {key: _json_safe(row.get(key)) for key in snapshot_keys if key in row}
     snapshot["component_probabilities"] = probs
     snapshot["component_expected_returns"] = returns
+    snapshot["prediction_interval_80"] = artifact.get("prediction_interval_80")
     upsert_rows(
         session,
         Prediction,

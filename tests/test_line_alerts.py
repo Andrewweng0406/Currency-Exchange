@@ -17,7 +17,7 @@ def test_daily_report_contains_required_language():
         current_usdtwd=31.42,
         bank_spot_selling=31.47,
         changes={"1d": 0.003, "5d": 0.008, "20d": -0.012},
-        predictions={"1d": {"prob_up": 0.61, "prob_down": 0.39}},
+        predictions={"1d": {"prob_up": 0.61, "prob_down": 0.39, "prediction_interval_80": {"lower": -0.01, "upper": 0.02}}},
         risk=RiskSnapshot(
             "2026-01-01T00:00:00Z",
             72,
@@ -31,6 +31,7 @@ def test_daily_report_contains_required_language():
         exchange=ExchangeRecommendation("EXCHANGE_50_PERCENT", 50, 7000, 3500, 45, []),
     )
     assert "USD/TWD 留學生換匯監控" in text
+    assert "預測報酬區間" in text
     assert "不代表匯率一定會上漲或下跌" in text
 
 
