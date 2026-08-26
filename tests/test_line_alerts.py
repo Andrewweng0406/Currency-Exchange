@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.alerts.engine import AlertCandidate, persist_alert, should_send_alert
 from app.database.schema import Base
-from app.exchange.planner import ExchangeRecommendation
+from app.exchange.planner import ExchangeInputs, ExchangeRecommendation
+from app.line.client import verify_line_signature
 from app.line.formatter import daily_report
 from app.risk.cbc import CbcInterventionRisk
 from app.risk.scoring import RiskSnapshot
@@ -29,9 +30,11 @@ def test_daily_report_contains_required_language():
             CbcInterventionRisk("LOW", True, ["test"]),
         ),
         exchange=ExchangeRecommendation("EXCHANGE_50_PERCENT", 50, 7000, 3500, 45, []),
+        exchange_inputs=ExchangeInputs(target_usd_amount=10000, usd_already_held=3000),
     )
     assert "USD/TWD 留學生換匯監控" in text
     assert "預測報酬區間" in text
+    assert "未來美元需求" in text
     assert "不代表匯率一定會上漲或下跌" in text
 
 
@@ -43,3 +46,15 @@ def test_alert_dedupe():
         assert should_send_alert(session, candidate, datetime(2026, 1, 1, tzinfo=timezone.utc))
         persist_alert(session, candidate, datetime(2026, 1, 1, tzinfo=timezone.utc))
         assert not should_send_alert(session, candidate, datetime(2026, 1, 1, 0, 30, tzinfo=timezone.utc))
+
+
+def test_line_signature_verification():
+    import base64
+    import hashlib
+    import hmac
+
+    body = b'{"events":[]}'
+    secret = "secret"
+    signature = base64.b64encode(hmac.new(secret.encode(), body, hashlib.sha256).digest()).decode()
+    assert verify_line_signature(body, signature, secret)
+    assert not verify_line_signature(body, "bad", secret)

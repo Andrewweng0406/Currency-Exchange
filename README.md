@@ -112,9 +112,18 @@ High-level setup:
 ```bash
 LINE_CHANNEL_ACCESS_TOKEN=...
 LINE_USER_ID=...
+LINE_CHANNEL_SECRET=...
 ```
 
 Never commit `.env`.
+
+To discover your `LINE_USER_ID`, deploy or expose the API endpoint below as the LINE webhook URL, send a message to the Official Account, then inspect the response/logs:
+
+```text
+POST /line/webhook
+```
+
+The endpoint verifies the LINE signature when `LINE_CHANNEL_SECRET` is set and returns any `source.userId` values present in webhook events.
 
 ## 8. Planned Commands
 
@@ -219,6 +228,8 @@ Implemented:
 - Market regimes: `RISK_ON`, `RISK_OFF`, `USD_STRONG`, `USD_WEAK`, `HIGH_VOL`, `LOW_VOL`, `TWD_IDIOSYNCRATIC`.
 - Exchange planner outputs `WAIT`, `EXCHANGE_25_PERCENT`, `EXCHANGE_50_PERCENT`, `EXCHANGE_75_PERCENT`, or `EXCHANGE_100_PERCENT`.
 - LINE Messaging API client, Traditional Chinese report formatting, alert candidates, and dedupe logic.
+- Webhook helper endpoint for discovering `LINE_USER_ID`.
+- Exchange plans are persisted to the `exchange_plans` table.
 
 Required from you before real LINE sending:
 

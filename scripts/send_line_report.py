@@ -27,7 +27,8 @@ def main() -> None:
     features = load_feature_frame(session)
     latest = features.iloc[-1]
     risk = latest_risk_snapshot(session)
-    exchange = recommend_exchange(default_inputs(), risk.twd_risk_score, risk.opportunity_score)
+    inputs = default_inputs()
+    exchange = recommend_exchange(inputs, risk.twd_risk_score, risk.opportunity_score)
     predictions = _predictions(session)
     bank = session.execute(select(BankRate.spot_selling).order_by(BankRate.observed_at_utc.desc()).limit(1)).scalar_one_or_none()
     message = daily_report(
@@ -37,6 +38,7 @@ def main() -> None:
         predictions=predictions,
         risk=risk,
         exchange=exchange,
+        exchange_inputs=inputs,
         upcoming_events=upcoming_event_risk(session),
     )
     alerts = [candidate for candidate in generate_alerts(risk, predictions) if should_send_alert(session, candidate)]

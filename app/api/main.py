@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, Request
 from sqlalchemy import select
 
 from app.backtesting.dataset import load_feature_frame
@@ -11,6 +11,7 @@ from app.database.schema import BankRate, Prediction
 from app.database.session import make_session
 from app.economic_events.importer import upcoming_event_risk
 from app.exchange.planner import default_inputs, recommend_exchange
+from app.line.client import verify_line_signature
 from app.risk.scoring import latest_risk_snapshot
 
 app = FastAPI(title="TWD FX Monitor API", version="0.1.0")
@@ -74,6 +75,19 @@ def usdtwd_chart(limit: int = 365):
         }
         for _, row in features.iterrows()
     ]
+
+
+@app.post("/line/webhook")
+async def line_webhook(request: Request, x_line_signature: str | None = Header(default=None)):
+    body = await request.body()
+    verified = verify_line_signature(body, x_line_signature)
+    payload = await request.json()
+    user_ids = []
+    for event in payload.get("events", []):
+        source = event.get("source", {})
+        if source.get("userId"):
+            user_ids.append(source["userId"])
+    return {"ok": True, "signature_verified": verified, "user_ids": user_ids}
 
 
 def _predictions(session):

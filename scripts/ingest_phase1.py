@@ -82,15 +82,23 @@ def _ingest_bank_rates(session, provider) -> int:
 
 
 def _ingest_bank_with_fallback(session, provider_kwargs: dict) -> int:
-    primary = BankOfTaiwanProvider(**provider_kwargs)
+    cfg = settings()
+    bank_cfg = cfg["providers"].get("bank", {})
+    registry = {"bot": BankOfTaiwanProvider, "landbank": LandBankProvider}
+    primary_key = bank_cfg.get("provider", "bot")
+    fallback_key = bank_cfg.get("fallback_provider", "landbank")
+    primary = registry.get(primary_key, BankOfTaiwanProvider)(**provider_kwargs)
     try:
         return _ingest_bank_rates(session, primary)
     except Exception as primary_exc:  # noqa: BLE001
-        fallback = LandBankProvider(**provider_kwargs)
+        fallback = registry.get(fallback_key, LandBankProvider)(**provider_kwargs)
         try:
             return _ingest_bank_rates(session, fallback)
         except Exception as fallback_exc:  # noqa: BLE001
-            raise ProviderError(f"primary BOT failed: {primary_exc}; fallback Land Bank failed: {fallback_exc}") from fallback_exc
+            raise ProviderError(
+                f"primary bank provider {primary_key} failed: {primary_exc}; "
+                f"fallback bank provider {fallback_key} failed: {fallback_exc}"
+            ) from fallback_exc
 
 
 @cli.command()

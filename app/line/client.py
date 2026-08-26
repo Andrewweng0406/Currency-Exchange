@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import os
+import base64
+import hashlib
+import hmac
 from dataclasses import dataclass
 
 import requests
@@ -33,3 +36,12 @@ class LineMessagingClient:
         if response.ok:
             return LineSendResult(ok=True, status_code=response.status_code)
         return LineSendResult(ok=False, status_code=response.status_code, error=response.text)
+
+
+def verify_line_signature(body: bytes, signature: str | None, channel_secret: str | None = None) -> bool:
+    secret = channel_secret or os.getenv("LINE_CHANNEL_SECRET")
+    if not secret or not signature:
+        return False
+    digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).digest()
+    expected = base64.b64encode(digest).decode("utf-8")
+    return hmac.compare_digest(expected, signature)

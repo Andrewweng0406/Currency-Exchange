@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-
-from app.exchange.planner import ExchangeRecommendation
+from app.exchange.planner import ExchangeInputs, ExchangeRecommendation
 from app.risk.scoring import RiskSnapshot
 
 
@@ -13,6 +11,7 @@ def daily_report(
     predictions: dict[str, dict[str, float | None]],
     risk: RiskSnapshot,
     exchange: ExchangeRecommendation,
+    exchange_inputs: ExchangeInputs | None = None,
     upcoming_events: list[dict] | None = None,
 ) -> str:
     pred_lines = []
@@ -25,6 +24,12 @@ def daily_report(
         pred_lines.append(f"未來 {horizon.upper()}\n美元上漲：{up}\n台幣升值：{down}\n預測報酬區間：{interval_text}")
     contributors = "\n".join(_contributor_line(item) for item in risk.contributors)
     event_block = _event_block(upcoming_events or [])
+    need_block = ""
+    if exchange_inputs:
+        need_block = (
+            f"未來美元需求：\n${exchange_inputs.target_usd_amount:,.0f}\n\n"
+            f"已持有：\n${exchange_inputs.usd_already_held:,.0f}\n\n"
+        )
     return (
         "🇹🇼 USD/TWD 留學生換匯監控\n\n"
         f"目前市場匯率：\n{current_usdtwd:.3f}\n\n"
@@ -50,6 +55,7 @@ def daily_report(
         f"{contributors}\n\n"
         "━━━━━━━━━━\n\n"
         "💵 換匯建議\n\n"
+        f"{need_block}"
         f"尚缺：\n${exchange.usd_shortfall:,.0f}\n\n"
         "Recommendation：\n"
         f"{exchange.action.replace('_', ' ')}\n\n"

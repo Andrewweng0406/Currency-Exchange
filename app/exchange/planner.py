@@ -5,6 +5,8 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from app.config import risk_policy
+from app.database.schema import ExchangePlan
+from app.database.upsert import upsert_rows
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,27 @@ def recommend_exchange(inputs: ExchangeInputs, risk_score: int, opportunity_scor
         suggested_usd_to_exchange=suggested,
         deadline_risk=deadline_risk,
         rationale=rationale,
+    )
+
+
+def persist_exchange_plan(session, inputs: ExchangeInputs, recommendation: ExchangeRecommendation) -> int:
+    now = datetime.now(timezone.utc)
+    return upsert_rows(
+        session,
+        ExchangePlan,
+        [
+            {
+                "observed_at_utc": now,
+                "source": "exchange_planner",
+                "monthly_usd_need": inputs.monthly_usd_need,
+                "target_usd_amount": inputs.target_usd_amount,
+                "usd_already_held": inputs.usd_already_held,
+                "twd_available": inputs.twd_available,
+                "next_payment_date": inputs.next_payment_date.isoformat() if inputs.next_payment_date else None,
+                "recommendation": recommendation.action,
+            }
+        ],
+        ("observed_at_utc", "source"),
     )
 
 
