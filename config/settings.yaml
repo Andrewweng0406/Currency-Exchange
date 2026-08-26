@@ -1,0 +1,41 @@
+app:
+  name: TWD FX Monitor
+  timezone_storage: UTC
+  timezone_user: America/Los_Angeles
+  timezone_us_macro: America/New_York
+  timezone_taiwan: Asia/Taipei
+
+database:
+  url: ${DATABASE_URL:-sqlite:///data/twd_fx_monitor.db}
+
+providers:
+  default_timeout_seconds: 20
+  retry_attempts: 3
+  retry_wait_seconds: 2
+  bank:
+    name: Bank of Taiwan
+    provider: bot
+    fallback_provider: landbank
+    currency: USD
+  fred:
+    base_csv_url: https://fred.stlouisfed.org/graph/fredgraph.csv
+    series:
+      us_2y: DGS2
+      us_10y: DGS10
+      vix: VIXCLS
+      sp500: SP500
+      nasdaq: NASDAQCOM
+      broad_usd_index: DTWEXBGS
+  yahoo:
+    enabled: true
+    period_years: 10
+    symbols:
+      market_usdtwd: USDTWD=X
+      dxy: DX-Y.NYB
+      usd_cnh: USDCNH=X
+      usd_krw: USDKRW=X
+      usd_jpy: USDJPY=X
+      tsm_adr: TSM
+  twse:
+    base_url: https://www.twse.com.tw/rwd/zh
+    tsmc_stock_no: "2330"

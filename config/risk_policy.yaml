@@ -1,0 +1,30 @@
+risk_score:
+  scale_min: 0
+  scale_max: 100
+  bands:
+    strong_twd: [0, 20]
+    moderately_favorable: [21, 40]
+    neutral: [41, 60]
+    twd_depreciation_risk: [61, 80]
+    high_twd_depreciation_risk: [81, 100]
+
+exchange_recommendation:
+  actions: [WAIT, EXCHANGE_25_PERCENT, EXCHANGE_50_PERCENT, EXCHANGE_75_PERCENT, EXCHANGE_100_PERCENT]
+  deadline_days:
+    flexible: 30
+    elevated: 14
+    urgent: 7
+    critical: 3
+
+alerts:
+  dedupe_window_minutes: 60
+  resend_if_risk_score_increase: 8
+  resend_if_probability_change: 0.08
+  twd_depreciation_warning:
+    horizon: 5d
+    probability_up_min: 0.70
+  sudden_fx_move:
+    rolling_zscore_min: 2.5
+  good_exchange_opportunity:
+    opportunity_score_min: 85
+  macro_event_notice_hours: [24, 6, 1]
