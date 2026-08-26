@@ -110,6 +110,7 @@ Never commit `.env`.
 These commands will be added in later phases:
 
 ```bash
+python scripts/run_backtest_phase3.py
 python scripts/train_models.py --horizon 1d
 python scripts/train_models.py --horizon 5d
 python scripts/train_models.py --horizon 20d
@@ -131,7 +132,28 @@ The production scheduler should use conservative data frequencies:
 - Yahoo supplemental market data: daily unless intraday alerting is explicitly enabled.
 - Macro/event data: aligned to official release timestamps.
 
-## 10. Design Guardrails
+## 10. Phase 3 Backtesting Framework
+
+Current Phase 3 command:
+
+```bash
+python scripts/run_backtest_phase3.py
+```
+
+It currently reports:
+
+- Feature row range and count.
+- Modeling feature count.
+- Expanding walk-forward yearly splits.
+- Forward targets for 1D, 5D, and 20D horizons.
+- Tail-risk target columns for USD/TWD rises above 0.5%, 1%, 1.5%, and 2%.
+- Classification metrics scaffolding: accuracy, precision, recall, F1, ROC-AUC, Brier score, calibration error, and TWD depreciation recall.
+- Regression metrics scaffolding: MAE and RMSE.
+- Smoke-test comparison of fixed-date exchange vs equal-tranche exchange.
+
+The prediction-based Strategy C is intentionally not simulated yet because real model predictions and risk scores start in later phases. No synthetic prediction signals are used.
+
+## 11. Design Guardrails
 
 - No random train/test split for time-series modeling.
 - No look-ahead bias: macro values must be joined by release timestamp.
