@@ -51,6 +51,16 @@ DATABASE_URL=postgresql+psycopg://twdfx:twdfx_dev_password@localhost:5432/twdfx
 
 PostgreSQL will require adding a driver such as `psycopg[binary]` to your environment.
 
+## 3.1 Database Migrations
+
+Alembic is configured for production schema tracking:
+
+```bash
+alembic upgrade head
+```
+
+The current revision is a baseline migration because the first local SQLite database was created before Alembic was introduced. New schema changes should be added as explicit Alembic revisions.
+
 ## 3. Run Phase 1 Ingestion
 
 ```bash
@@ -209,6 +219,17 @@ Current decision command:
 python scripts/generate_decision.py
 ```
 
+Configure your default planner profile:
+
+```bash
+python scripts/configure_profile.py \
+  --target-usd-amount 10000 \
+  --usd-already-held 3000 \
+  --next-payment-date 2026-09-15 \
+  --monthly-usd-need 2500 \
+  --twd-available 250000
+```
+
 Current LINE dry-run command:
 
 ```bash
@@ -231,6 +252,7 @@ Implemented:
 - Webhook helper endpoint for discovering `LINE_USER_ID`.
 - Exchange plans are persisted to the `exchange_plans` table.
 - Immediate alert candidates: TWD depreciation warning, sudden FX move, good exchange opportunity, and macro event notice.
+- Model explanation block using logistic coefficients and XGBoost gain, labeled as association rather than causation.
 
 Required from you before real LINE sending:
 

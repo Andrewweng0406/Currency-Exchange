@@ -28,6 +28,7 @@ def test_daily_report_contains_required_language():
             [{"name": "dxy_momentum", "contribution": 7}],
             TailRiskSnapshot("5d", {"USD_TWD_UP_GT_1PCT": 0.32, "USD_TWD_UP_GT_2PCT": 0.05}, "test"),
             CbcInterventionRisk("LOW", True, ["test"]),
+            {"5d": []},
         ),
         exchange=ExchangeRecommendation("EXCHANGE_50_PERCENT", 50, 7000, 3500, 45, []),
         exchange_inputs=ExchangeInputs(target_usd_amount=10000, usd_already_held=3000),
@@ -70,6 +71,7 @@ def test_generate_sudden_fx_and_macro_alerts():
         [],
         TailRiskSnapshot("5d", {"USD_TWD_UP_GT_1PCT": 0.1, "USD_TWD_UP_GT_2PCT": 0.02}, "test"),
         CbcInterventionRisk("MEDIUM", True, ["test"]),
+        {"5d": []},
     )
     alerts = generate_alerts(
         risk,

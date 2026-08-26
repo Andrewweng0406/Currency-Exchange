@@ -14,6 +14,7 @@ from app.database.schema import Prediction
 from app.database.upsert import upsert_rows
 from app.risk.cbc import CbcInterventionRisk, estimate_cbc_intervention_risk
 from app.risk.tail import TailRiskSnapshot, estimate_tail_risk
+from app.models.explainability import FeatureContribution, explain_latest_prediction
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class RiskSnapshot:
     contributors: list[dict[str, Any]]
     tail_risk: TailRiskSnapshot
     cbc_intervention_risk: CbcInterventionRisk
+    model_explanations: dict[str, list[FeatureContribution]]
 
 
 def latest_risk_snapshot(session) -> RiskSnapshot:
@@ -56,6 +58,10 @@ def latest_risk_snapshot(session) -> RiskSnapshot:
         contributors=sorted(contributors, key=lambda item: abs(item["contribution"]), reverse=True)[:5],
         tail_risk=estimate_tail_risk(features),
         cbc_intervention_risk=estimate_cbc_intervention_risk(latest),
+        model_explanations={
+            horizon: explain_latest_prediction(horizon, latest)
+            for horizon in ["1d", "5d", "20d"]
+        },
     )
     _apply_risk_to_latest_predictions(session, predictions, score_int)
     return snapshot

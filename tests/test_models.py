@@ -1,4 +1,5 @@
 from app.models.training import _weights_from_scores
+from app.models.explainability import FeatureContribution
 
 
 class Score:
@@ -17,3 +18,8 @@ def test_weights_from_scores_sum_to_one():
     )
     assert round(sum(weights.values()), 8) == 1
     assert weights["a"] > weights["b"]
+
+
+def test_feature_contribution_marks_non_causal():
+    item = FeatureContribution("DXY_RETURN_5D", "USD_TWD_UP", 0.8, "logistic")
+    assert "not causation" in item.note

@@ -23,6 +23,7 @@ def daily_report(
         interval_text = _interval(interval)
         pred_lines.append(f"未來 {horizon.upper()}\n美元上漲：{up}\n台幣升值：{down}\n預測報酬區間：{interval_text}")
     contributors = "\n".join(_contributor_line(item) for item in risk.contributors)
+    model_explanations = _model_explanation_block(risk.model_explanations.get("5d", []))
     event_block = _event_block(upcoming_events or [])
     need_block = ""
     if exchange_inputs:
@@ -53,6 +54,7 @@ def daily_report(
         "━━━━━━━━━━\n\n"
         "🔎 主要原因\n\n"
         f"{contributors}\n\n"
+        f"{model_explanations}"
         "━━━━━━━━━━\n\n"
         "💵 換匯建議\n\n"
         f"{need_block}"
@@ -125,3 +127,15 @@ def _contributor_line(item: dict) -> str:
     contribution = float(item.get("contribution", 0))
     marker = "🔴" if contribution >= 6 else "🟡" if contribution >= 3 else "🟢"
     return f"{marker} {name}: {contribution:.1f}"
+
+
+def _model_explanation_block(items: list) -> str:
+    if not items:
+        return ""
+    lines = ["模型特徵貢獻 Top 5（非因果）："]
+    for item in items[:5]:
+        feature = getattr(item, "feature", "")
+        direction = getattr(item, "direction", "")
+        magnitude = getattr(item, "magnitude", 0)
+        lines.append(f"- {feature}: {direction}, {magnitude:.2f}")
+    return "\n".join(lines) + "\n\n"

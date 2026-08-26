@@ -20,6 +20,7 @@ Last verified: 2026-08-26 America/Los_Angeles.
 - Tail risk baseline for 5D USD/TWD shock probabilities.
 - TWD Risk Score, Opportunity Score, market regime detection, and estimated CBC intervention risk.
 - Exchange planner with staged recommendations and exchange plan persistence.
+- Profile configuration script for default USD need/payment settings.
 - LINE Messaging API client, Traditional Chinese daily report, alert dedupe, and webhook helper for user ID discovery.
 - Immediate alert candidates:
   - TWD depreciation warning.
@@ -30,8 +31,9 @@ Last verified: 2026-08-26 America/Los_Angeles.
 - Economic event CSV importer with release-time UTC normalization.
 - Model monitoring for matured predictions.
 - Scheduler script.
+- Model explanation block based on logistic coefficients and XGBoost feature importance, labeled as non-causal.
 - Strategy A/B/C first-pass comparison using real walk-forward probabilities.
-- Dockerfile, `.dockerignore`, Makefile, GitHub Actions test workflow, and readiness checker.
+- Dockerfile, `.dockerignore`, Makefile, GitHub Actions test workflow, Alembic baseline migration, and readiness checker.
 
 ## Latest Local Verification
 
@@ -83,7 +85,7 @@ CBC Intervention Risk: LOW (ESTIMATED)
 
 ## Next Hardening Targets
 
-- Add a proper migration tool such as Alembic before changing production schemas frequently.
+- Add explicit Alembic revisions for future schema changes.
 - Add calibrated tail-risk classifiers once more clean historical data is available.
-- Add richer explainability from model artifacts, with clear non-causal labeling.
+- Consider SHAP after model/data stability improves; current explainability is coefficient/gain based and non-causal.
 - Deploy API/dashboard/scheduler to a real environment after secrets and bank settings are provided.

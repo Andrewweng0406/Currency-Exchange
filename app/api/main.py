@@ -45,7 +45,7 @@ def overview():
             "change_5d": latest.get("USDTWD_RETURN_5D"),
             "change_20d": latest.get("USDTWD_RETURN_20D"),
         },
-        "risk": risk.__dict__,
+        "risk": _dataclass_safe(risk),
         "exchange": exchange.__dict__,
         "predictions": predictions,
         "upcoming_events": upcoming_event_risk(session),
@@ -121,3 +121,13 @@ def _json_safe(value):
     if hasattr(value, "item"):
         return value.item()
     return value
+
+
+def _dataclass_safe(value):
+    if hasattr(value, "__dict__"):
+        return {key: _dataclass_safe(item) for key, item in value.__dict__.items()}
+    if isinstance(value, dict):
+        return {key: _dataclass_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_dataclass_safe(item) for item in value]
+    return _json_safe(value)
