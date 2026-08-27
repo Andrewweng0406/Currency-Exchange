@@ -15,3 +15,10 @@ def test_line_webhook_returns_user_ids():
     response = client.post("/line/webhook", json={"events": [{"source": {"userId": "U123"}}]})
     assert response.status_code == 200
     assert response.json()["user_ids"] == ["U123"]
+
+
+def test_ai_latest_empty_database():
+    client = TestClient(app)
+    response = client.get("/ai/latest")
+    assert response.status_code == 200
+    assert response.json()["provider"] == "openai"

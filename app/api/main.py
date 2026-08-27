@@ -70,7 +70,10 @@ def data_quality():
 
 @app.get("/ai/latest")
 def ai_latest():
-    return _dataclass_safe(latest_ai_interpretation(_session()))
+    latest = latest_ai_interpretation(_session())
+    if latest is None:
+        return {"enabled": False, "provider": "openai", "model": None}
+    return _dataclass_safe(latest)
 
 
 @app.get("/charts/usdtwd")
