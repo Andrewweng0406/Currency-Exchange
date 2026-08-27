@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Iterable, Type
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 
@@ -19,16 +20,58 @@ def upsert_rows(
     rows: Iterable[dict[str, Any]],
     key_fields: tuple[str, ...],
 ) -> int:
+    clean_rows = [_clean_row(row) for row in rows]
+    if not clean_rows:
+        return 0
+    if session.bind and session.bind.dialect.name == "postgresql":
+        return _upsert_postgresql(session, model, clean_rows, key_fields)
+    return _upsert_row_by_row(session, model, clean_rows, key_fields)
+
+
+def _clean_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: (_as_py_datetime(value) if key.endswith("_utc") or key in {"observed_at_utc", "release_time_utc"} else value)
+        for key, value in row.items()
+    }
+
+
+def _upsert_postgresql(session: Session, model: Type, rows: list[dict[str, Any]], key_fields: tuple[str, ...]) -> int:
+    table = model.__table__
+    statement = pg_insert(table).values(rows)
+    update_fields = {
+        column.name: getattr(statement.excluded, column.name)
+        for column in table.columns
+        if column.name not in {"id", "created_at_utc", *key_fields} and column.name in rows[0]
+    }
+    statement = statement.on_conflict_do_update(index_elements=list(key_fields), set_=update_fields)
+    try:
+        session.execute(statement)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    return len(rows)
+
+
+def _upsert_row_by_row(
+    session: Session,
+    model: Type,
+    rows: list[dict[str, Any]],
+    key_fields: tuple[str, ...],
+) -> int:
     count = 0
-    for row in rows:
-        clean = {k: (_as_py_datetime(v) if k.endswith("_utc") or k in {"observed_at_utc", "release_time_utc"} else v) for k, v in row.items()}
-        filters = [getattr(model, field) == clean[field] for field in key_fields]
-        existing = session.execute(select(model).where(*filters)).scalar_one_or_none()
-        if existing:
-            for key, value in clean.items():
-                setattr(existing, key, value)
-        else:
-            session.add(model(**clean))
-        count += 1
-    session.commit()
+    try:
+        for row in rows:
+            filters = [getattr(model, field) == row[field] for field in key_fields]
+            existing = session.execute(select(model).where(*filters)).scalar_one_or_none()
+            if existing:
+                for key, value in row.items():
+                    setattr(existing, key, value)
+            else:
+                session.add(model(**row))
+            count += 1
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
     return count
