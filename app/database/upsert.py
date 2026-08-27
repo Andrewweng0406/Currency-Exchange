@@ -7,6 +7,8 @@ from sqlalchemy import UniqueConstraint, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+POSTGRES_BATCH_SIZE = 5_000
+
 
 def _as_py_datetime(value: Any) -> datetime:
     if hasattr(value, "to_pydatetime"):
@@ -44,16 +46,18 @@ def _has_unique_key(model: Type, key_fields: tuple[str, ...]) -> bool:
 
 
 def _upsert_postgresql(session: Session, model: Type, rows: list[dict[str, Any]], key_fields: tuple[str, ...]) -> int:
-    table = model.__table__
-    statement = pg_insert(table).values(rows)
-    update_fields = {
-        column.name: getattr(statement.excluded, column.name)
-        for column in table.columns
-        if column.name not in {"id", "created_at_utc", *key_fields} and column.name in rows[0]
-    }
-    statement = statement.on_conflict_do_update(index_elements=list(key_fields), set_=update_fields)
     try:
-        session.execute(statement)
+        for start in range(0, len(rows), POSTGRES_BATCH_SIZE):
+            batch = rows[start : start + POSTGRES_BATCH_SIZE]
+            table = model.__table__
+            statement = pg_insert(table).values(batch)
+            update_fields = {
+                column.name: getattr(statement.excluded, column.name)
+                for column in table.columns
+                if column.name not in {"id", "created_at_utc", *key_fields} and column.name in batch[0]
+            }
+            statement = statement.on_conflict_do_update(index_elements=list(key_fields), set_=update_fields)
+            session.execute(statement)
         session.commit()
     except Exception:
         session.rollback()
