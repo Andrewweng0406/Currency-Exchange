@@ -33,10 +33,13 @@ def test_daily_report_contains_required_language():
         exchange=ExchangeRecommendation("EXCHANGE_50_PERCENT", 50, 7000, 3500, 45, []),
         exchange_inputs=ExchangeInputs(target_usd_amount=10000, usd_already_held=3000),
     )
-    assert "USD/TWD 留學生換匯監控" in text
-    assert "預測報酬區間" in text
-    assert "未來美元需求" in text
-    assert "不代表匯率一定會上漲或下跌" in text
+    assert "美元換匯提醒" in text
+    assert "主要判斷依據" in text
+    assert "美元指數 DXY" in text
+    assert "美元需求：$10,000，已持有：$3,000" in text
+    assert "這是機率與風險提醒，不是保證漲跌" in text
+    assert "預測報酬區間" not in text
+    assert "模型特徵貢獻" not in text
 
 
 def test_alert_dedupe():

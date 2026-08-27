@@ -20,7 +20,7 @@ def test_openai_json_parsing_and_adjustment_clamp():
     assert result.macro_sentiment == "MIXED"
 
 
-def test_daily_report_includes_ai_interpretation():
+def test_daily_report_keeps_ai_details_out_of_family_summary():
     risk = RiskSnapshot(
         "2026-01-01T00:00:00Z",
         50,
@@ -51,5 +51,6 @@ def test_daily_report_includes_ai_interpretation():
         exchange=ExchangeRecommendation("WAIT", 0, 10000, 0, 35, []),
         ai_interpretation=ai,
     )
-    assert "AI 風險解讀" in text
-    assert "非預測模型" in text
+    assert "美元換匯提醒" in text
+    assert "AI 風險解讀" not in text
+    assert "非預測模型" not in text
