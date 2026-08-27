@@ -42,6 +42,14 @@ For local development, the default SQLite database is enough:
 DATABASE_URL=sqlite:///data/twd_fx_monitor.db
 ```
 
+Optional OpenAI AI risk interpreter:
+
+```bash
+OPENAI_ENABLED=false
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.6
+```
+
 For PostgreSQL:
 
 ```bash
@@ -274,6 +282,7 @@ Useful endpoints:
 - `GET /overview`
 - `GET /features/latest`
 - `GET /data-quality`
+- `GET /ai/latest`
 - `GET /charts/usdtwd?limit=365`
 
 Start the dashboard:
@@ -287,6 +296,14 @@ Run model-health evaluation:
 ```bash
 python scripts/evaluate_model_health.py
 ```
+
+Run optional OpenAI AI risk interpretation:
+
+```bash
+OPENAI_ENABLED=true python scripts/generate_ai_interpretation.py --save
+```
+
+The OpenAI layer summarizes existing model outputs and market context in Traditional Chinese. It does not directly change `prob_up`, `risk_score`, or exchange percentages.
 
 Run operational readiness checks:
 

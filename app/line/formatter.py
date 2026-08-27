@@ -13,6 +13,7 @@ def daily_report(
     exchange: ExchangeRecommendation,
     exchange_inputs: ExchangeInputs | None = None,
     upcoming_events: list[dict] | None = None,
+    ai_interpretation: object | None = None,
 ) -> str:
     pred_lines = []
     for horizon in ["1d", "5d", "20d"]:
@@ -55,6 +56,7 @@ def daily_report(
         "🔎 主要原因\n\n"
         f"{contributors}\n\n"
         f"{model_explanations}"
+        f"{_ai_block(ai_interpretation)}"
         "━━━━━━━━━━\n\n"
         "💵 換匯建議\n\n"
         f"{need_block}"
@@ -139,3 +141,19 @@ def _model_explanation_block(items: list) -> str:
         magnitude = getattr(item, "magnitude", 0)
         lines.append(f"- {feature}: {direction}, {magnitude:.2f}")
     return "\n".join(lines) + "\n\n"
+
+
+def _ai_block(item: object | None) -> str:
+    if item is None or getattr(item, "error", None):
+        return ""
+    summary = getattr(item, "summary_zh_tw", None)
+    if not summary:
+        return ""
+    sentiment = getattr(item, "macro_sentiment", None) or "N/A"
+    risk_off = getattr(item, "risk_off_level", None) or "N/A"
+    adjustment = getattr(item, "confidence_adjustment", 0)
+    return (
+        "AI 風險解讀（非預測模型）：\n"
+        f"{summary}\n"
+        f"Macro: {sentiment} / Risk-off: {risk_off} / Confidence adj: {adjustment:+.0f}\n\n"
+    )

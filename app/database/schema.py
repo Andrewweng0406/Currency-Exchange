@@ -121,3 +121,16 @@ class ExchangePlan(TimestampMixin, Base):
     twd_available: Mapped[float | None] = mapped_column(Float)
     next_payment_date: Mapped[str | None] = mapped_column(String(20))
     recommendation: Mapped[str | None] = mapped_column(String(80))
+
+
+class AIInterpretation(TimestampMixin, Base):
+    __tablename__ = "ai_interpretations"
+
+    provider: Mapped[str] = mapped_column(String(40), index=True)
+    model: Mapped[str] = mapped_column(String(80), index=True)
+    macro_sentiment: Mapped[str | None] = mapped_column(String(40))
+    fed_tone: Mapped[str | None] = mapped_column(String(40))
+    risk_off_level: Mapped[str | None] = mapped_column(String(40))
+    confidence_adjustment: Mapped[float | None] = mapped_column(Float)
+    summary_zh_tw: Mapped[str | None] = mapped_column(Text)
+    raw_response: Mapped[str | None] = mapped_column(Text)

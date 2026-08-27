@@ -1,4 +1,4 @@
-.PHONY: install test ingest features train decision line-dry-run api dashboard strategy health readiness data-quality migrate profile
+.PHONY: install test ingest features train decision ai line-dry-run api dashboard strategy health readiness data-quality migrate profile
 
 install:
 	python3 -m venv .venv
@@ -18,6 +18,9 @@ train:
 
 decision:
 	. .venv/bin/activate && python scripts/generate_decision.py
+
+ai:
+	. .venv/bin/activate && python scripts/generate_ai_interpretation.py --save
 
 line-dry-run:
 	. .venv/bin/activate && python scripts/send_line_report.py

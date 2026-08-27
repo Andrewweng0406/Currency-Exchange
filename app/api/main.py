@@ -5,6 +5,7 @@ import json
 from fastapi import FastAPI, Header, Request
 from sqlalchemy import select
 
+from app.ai.openai_interpreter import latest_ai_interpretation
 from app.backtesting.dataset import load_feature_frame
 from app.config import settings
 from app.database.schema import BankRate, Prediction
@@ -50,6 +51,7 @@ def overview():
         "exchange": exchange.__dict__,
         "predictions": predictions,
         "upcoming_events": upcoming_event_risk(session),
+        "ai_interpretation": _dataclass_safe(latest_ai_interpretation(session)),
     }
 
 
@@ -64,6 +66,11 @@ def latest_features():
 @app.get("/data-quality")
 def data_quality():
     return data_coverage_report(_session())
+
+
+@app.get("/ai/latest")
+def ai_latest():
+    return _dataclass_safe(latest_ai_interpretation(_session()))
 
 
 @app.get("/charts/usdtwd")
