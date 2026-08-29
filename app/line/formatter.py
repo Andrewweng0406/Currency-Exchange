@@ -23,8 +23,7 @@ def daily_report(
     ]
     reason_lines = _simple_reason_lines(risk.contributors)
     event_block = _simple_event_block(upcoming_events or [])
-    target_usd = exchange_inputs.target_usd_amount if exchange_inputs else exchange.usd_shortfall
-    held_usd = exchange_inputs.usd_already_held if exchange_inputs else 0
+    _ = exchange_inputs
     return (
         "🇹🇼 美元換匯提醒\n\n"
         f"目前匯率：{current_usdtwd:.3f}\n"
@@ -42,10 +41,7 @@ def daily_report(
         + "\n\n"
         "━━━━━━━━━━\n\n"
         "換匯建議\n"
-        f"{_simple_action(exchange.action)}\n"
-        f"美元需求：${target_usd:,.0f}，已持有：${held_usd:,.0f}\n"
-        f"目前建議先換：約 ${exchange.suggested_usd_to_exchange:,.0f}\n"
-        f"尚缺：約 ${exchange.usd_shortfall:,.0f}\n\n"
+        f"{_simple_timing_action(exchange.action)}\n\n"
         f"{event_block}"
         "這是機率與風險提醒，不是保證漲跌。"
     )
@@ -53,7 +49,7 @@ def daily_report(
 
 def alert_message(alert_type: str, title: str, body: str, risk_score: int | None = None) -> str:
     risk = f"\n\nRisk Score：\n{risk_score}" if risk_score is not None else ""
-    return f"{title}\n\n{body}{risk}\n\n請依近期美元需求重新評估換匯比例。"
+    return f"{title}\n\n{body}{risk}\n\n請依近期是否需要美元，重新評估換匯時間。"
 
 
 def _pct(value: float | None) -> str:
@@ -146,13 +142,13 @@ def _simple_risk_label(score: int) -> str:
     return "台幣貶值風險偏高"
 
 
-def _simple_action(action: str) -> str:
+def _simple_timing_action(action: str) -> str:
     labels = {
-        "WAIT": "先等一下，不急著換。",
-        "EXCHANGE_25_PERCENT": "可以先換一小部分。",
-        "EXCHANGE_50_PERCENT": "建議先換一半左右。",
-        "EXCHANGE_75_PERCENT": "建議先換大部分。",
-        "EXCHANGE_100_PERCENT": "建議先換足需要金額。",
+        "WAIT": "可以再等一下，現在不用急著換。",
+        "EXCHANGE_25_PERCENT": "可以開始留意，若近期需要美元可考慮先換一些。",
+        "EXCHANGE_50_PERCENT": "現在偏向適合換，建議不要全部等到之後。",
+        "EXCHANGE_75_PERCENT": "現在換匯風險偏高，近期需要美元的話建議優先處理。",
+        "EXCHANGE_100_PERCENT": "時間或風險已經偏緊，近期需要美元的話建議盡快處理。",
     }
     return labels.get(action, action.replace("_", " "))
 

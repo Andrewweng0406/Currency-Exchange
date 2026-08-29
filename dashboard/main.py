@@ -60,17 +60,20 @@ tail_cols[0].metric("5D > +1%", f"{risk.tail_risk.probabilities.get('USD_TWD_UP_
 tail_cols[1].metric("5D > +2%", f"{risk.tail_risk.probabilities.get('USD_TWD_UP_GT_2PCT', 0):.0%}")
 tail_cols[2].metric("CBC Risk", f"{risk.cbc_intervention_risk.level}", "ESTIMATED")
 
-st.subheader("Exchange Planner")
+st.subheader("Timing Advisor")
 with st.form("planner"):
-    c1, c2, c3, c4 = st.columns(4)
-    target = c1.number_input("Target USD", min_value=0.0, value=10000.0, step=500.0)
-    held = c2.number_input("USD Held", min_value=0.0, value=0.0, step=500.0)
-    twd = c3.number_input("TWD Available", min_value=0.0, value=0.0, step=10000.0)
-    payment = c4.date_input("Next Payment Date", value=None)
-    submitted = st.form_submit_button("Calculate")
+    payment = st.date_input("Next USD payment date", value=None)
+    submitted = st.form_submit_button("Check timing")
 if submitted:
-    rec = recommend_exchange(ExchangeInputs(target, held, twd, payment), risk.twd_risk_score, risk.opportunity_score)
-    st.info(f"{rec.action}: exchange about ${rec.suggested_usd_to_exchange:,.0f} now. Shortfall ${rec.usd_shortfall:,.0f}.")
+    rec = recommend_exchange(ExchangeInputs(1, 0, next_payment_date=payment), risk.twd_risk_score, risk.opportunity_score)
+    timing_labels = {
+        "WAIT": "Wait. Current signals do not suggest urgency.",
+        "EXCHANGE_25_PERCENT": "Start watching closely. Consider exchanging if you need USD soon.",
+        "EXCHANGE_50_PERCENT": "Reasonable timing to exchange. Avoid waiting for a perfect rate.",
+        "EXCHANGE_75_PERCENT": "Elevated TWD depreciation risk. Consider exchanging sooner.",
+        "EXCHANGE_100_PERCENT": "Timing or risk is tight. Prioritize securing USD soon.",
+    }
+    st.info(timing_labels.get(rec.action, rec.action.replace("_", " ")))
 
 st.subheader("Charts")
 chart_df = features.tail(365)

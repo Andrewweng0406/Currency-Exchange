@@ -29,7 +29,7 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 - Prediction interval output using historical forward-return quantiles.
 - Tail risk baseline for 5D USD/TWD shock probabilities.
 - TWD Risk Score, Opportunity Score, market regime detection, and estimated CBC intervention risk.
-- Exchange planner with staged recommendations and exchange plan persistence.
+- Exchange timing advisor with staged internal recommendations and exchange plan persistence.
 - Profile configuration script for default USD need/payment settings.
 - LINE Messaging API client, Traditional Chinese daily report, alert dedupe, and webhook helper for user ID discovery.
 - Immediate alert candidates:
@@ -44,7 +44,7 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 - Model explanation block based on logistic coefficients and XGBoost feature importance, labeled as non-causal.
 - Strategy A/B/C first-pass comparison using real walk-forward probabilities.
 - Dockerfile, `.dockerignore`, Makefile, GitHub Actions test workflow, Alembic baseline migration, and readiness checker.
-- Concise family-friendly LINE daily report deployed to Railway.
+- Concise family-friendly LINE daily report deployed to Railway. The family report now focuses on timing and does not show exchange amounts or percentages.
 - Production scheduler support behind `SCHEDULER_ENABLED=true`, plus `scripts/run_daily_pipeline.py` for one-off daily automation.
 
 ## Latest Local Verification

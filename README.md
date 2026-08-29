@@ -244,7 +244,7 @@ The current first-pass Strategy C uses real walk-forward 5D probabilities. It is
 
 This means the first-pass risk strategy slightly improved average cost versus fixed day and materially reduced maximum regret, but it did not dominate equal tranches on regret. This should be treated as an honest baseline, not a finished optimized policy.
 
-## 12. Phase 5-7 Risk, Exchange Planner, And LINE
+## 12. Phase 5-7 Risk, Timing Advisor, And LINE
 
 Current decision command:
 
@@ -252,7 +252,7 @@ Current decision command:
 python scripts/generate_decision.py
 ```
 
-Configure your default planner profile:
+Configure the optional planner profile if you want deadline awareness. The family-facing LINE report does not show dollar amounts or percentages; it only says whether the timing looks favorable, neutral, or risky.
 
 ```bash
 python scripts/configure_profile.py \
@@ -280,8 +280,8 @@ Implemented:
 - TWD Risk Score from model probabilities, USD/TWD momentum, DXY, rates, Asia FX, global risk-off, and data quality.
 - Exchange Opportunity Score from USD/TWD percentile over 20D, 60D, 120D, and 252D.
 - Market regimes: `RISK_ON`, `RISK_OFF`, `USD_STRONG`, `USD_WEAK`, `HIGH_VOL`, `LOW_VOL`, `TWD_IDIOSYNCRATIC`.
-- Exchange planner outputs `WAIT`, `EXCHANGE_25_PERCENT`, `EXCHANGE_50_PERCENT`, `EXCHANGE_75_PERCENT`, or `EXCHANGE_100_PERCENT`.
-- LINE Messaging API client, Traditional Chinese report formatting, alert candidates, and dedupe logic.
+- Timing advisor internally maps risk to `WAIT`, `EXCHANGE_25_PERCENT`, `EXCHANGE_50_PERCENT`, `EXCHANGE_75_PERCENT`, or `EXCHANGE_100_PERCENT`, but family-facing messages only describe timing, not amount.
+- LINE Messaging API client, concise Traditional Chinese timing report, alert candidates, and dedupe logic.
 - Webhook helper endpoint for discovering `LINE_USER_ID`.
 - Exchange plans are persisted to the `exchange_plans` table.
 - Immediate alert candidates: TWD depreciation warning, sudden FX move, good exchange opportunity, and macro event notice.

@@ -36,8 +36,12 @@ def test_daily_report_contains_required_language():
     assert "美元換匯提醒" in text
     assert "主要判斷依據" in text
     assert "美元指數 DXY" in text
-    assert "美元需求：$10,000，已持有：$3,000" in text
+    assert "現在偏向適合換" in text
     assert "這是機率與風險提醒，不是保證漲跌" in text
+    assert "美元需求" not in text
+    assert "已持有" not in text
+    assert "尚缺" not in text
+    assert "建議先換：約" not in text
     assert "預測報酬區間" not in text
     assert "模型特徵貢獻" not in text
 
