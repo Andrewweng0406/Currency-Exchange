@@ -22,6 +22,7 @@ def daily_report(
         _simple_prediction_line("20天", predictions.get("20d", {})),
     ]
     reason_lines = _simple_reason_lines(risk.contributors)
+    timing_reason = _simple_timing_reason(exchange.action, predictions, risk, changes, reason_lines)
     event_block = _simple_event_block(upcoming_events or [])
     _ = exchange_inputs
     return (
@@ -41,7 +42,8 @@ def daily_report(
         + "\n\n"
         "━━━━━━━━━━\n\n"
         "換匯建議\n"
-        f"{_simple_timing_action(exchange.action)}\n\n"
+        f"{_simple_timing_action(exchange.action)}\n"
+        f"原因：{timing_reason}\n\n"
         f"{event_block}"
         "這是機率與風險提醒，不是保證漲跌。"
     )
@@ -151,6 +153,42 @@ def _simple_timing_action(action: str) -> str:
         "EXCHANGE_100_PERCENT": "時間或風險已經偏緊，近期需要美元的話建議盡快處理。",
     }
     return labels.get(action, action.replace("_", " "))
+
+
+def _simple_timing_reason(
+    action: str,
+    predictions: dict[str, dict[str, float | None]],
+    risk: RiskSnapshot,
+    changes: dict[str, float | None],
+    reason_lines: list[str],
+) -> str:
+    five_day = predictions.get("5d", {})
+    prob_up = five_day.get("prob_up")
+    prob_down = five_day.get("prob_down")
+    change_5d = changes.get("5d")
+    main_reason = _clean_reason(reason_lines[0]) if reason_lines else "目前資料有限"
+
+    if action == "WAIT":
+        if prob_down is not None and prob_down >= 0.55:
+            return f"模型偏向美元短期走弱，5天美元下跌機率約{_pct(prob_down)}；{main_reason}。"
+        if risk.twd_risk_score <= 40:
+            return f"台幣風險分數偏低，目前沒有明顯美元急漲壓力；{main_reason}。"
+        return f"目前訊號不夠強，適合先觀望；{main_reason}。"
+
+    if action in {"EXCHANGE_25_PERCENT", "EXCHANGE_50_PERCENT"}:
+        if prob_up is not None and prob_up >= 0.55:
+            return f"模型偏向美元短期走強，5天美元上漲機率約{_pct(prob_up)}；{main_reason}。"
+        if change_5d is not None and change_5d > 0:
+            return f"近期美元已有上漲跡象，等太久可能遇到更貴匯率；{main_reason}。"
+        return f"台幣風險開始升高，近期要用美元時不建議完全等待；{main_reason}。"
+
+    if risk.twd_risk_score >= 80:
+        return f"台幣風險分數偏高，代表美元上漲或台幣轉弱壓力較明顯；{main_reason}。"
+    return f"付款時間或市場風險偏緊，近期要用美元時應優先處理；{main_reason}。"
+
+
+def _clean_reason(line: str) -> str:
+    return line.removeprefix("• ").rstrip("。")
 
 
 def _simple_event_block(events: list[dict]) -> str:

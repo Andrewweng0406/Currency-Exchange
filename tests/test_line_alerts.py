@@ -18,7 +18,10 @@ def test_daily_report_contains_required_language():
         current_usdtwd=31.42,
         bank_spot_selling=31.47,
         changes={"1d": 0.003, "5d": 0.008, "20d": -0.012},
-        predictions={"1d": {"prob_up": 0.61, "prob_down": 0.39, "prediction_interval_80": {"lower": -0.01, "upper": 0.02}}},
+        predictions={
+            "1d": {"prob_up": 0.61, "prob_down": 0.39, "prediction_interval_80": {"lower": -0.01, "upper": 0.02}},
+            "5d": {"prob_up": 0.68, "prob_down": 0.32},
+        },
         risk=RiskSnapshot(
             "2026-01-01T00:00:00Z",
             72,
@@ -37,6 +40,8 @@ def test_daily_report_contains_required_language():
     assert "主要判斷依據" in text
     assert "美元指數 DXY" in text
     assert "現在偏向適合換" in text
+    assert "原因：" in text
+    assert "5天美元上漲機率約68%" in text
     assert "這是機率與風險提醒，不是保證漲跌" in text
     assert "美元需求" not in text
     assert "已持有" not in text
