@@ -93,6 +93,24 @@ def shutdown_background_scheduler() -> None:
     _scheduler = None
 
 
+def scheduler_status() -> dict:
+    if not _scheduler_enabled():
+        return {"enabled": False, "running": False, "jobs": []}
+    if _scheduler is None:
+        return {"enabled": True, "running": False, "jobs": []}
+    return {
+        "enabled": True,
+        "running": _scheduler.running,
+        "jobs": [
+            {
+                "id": job.id,
+                "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
+            }
+            for job in _scheduler.get_jobs()
+        ],
+    }
+
+
 def _scheduler_enabled() -> bool:
     cfg = settings().get("scheduler", {})
     value = os.getenv("SCHEDULER_ENABLED", str(cfg.get("enabled", "false")))

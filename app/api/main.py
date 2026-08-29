@@ -16,7 +16,7 @@ from app.exchange.planner import default_inputs, recommend_exchange
 from app.line.client import verify_line_signature
 from app.ops.data_quality import data_coverage_report
 from app.risk.scoring import latest_risk_snapshot
-from app.scheduler.jobs import shutdown_background_scheduler, start_background_scheduler
+from app.scheduler.jobs import scheduler_status, shutdown_background_scheduler, start_background_scheduler
 
 
 @asynccontextmanager
@@ -76,6 +76,11 @@ def latest_features():
 @app.get("/data-quality")
 def data_quality():
     return data_coverage_report(_session())
+
+
+@app.get("/scheduler/status")
+def scheduler_status_endpoint():
+    return scheduler_status()
 
 
 @app.get("/ai/latest")

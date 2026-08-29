@@ -174,6 +174,12 @@ With the scheduler enabled, the running API container keeps the LINE webhook ali
 - 23:20 UTC: model health evaluation.
 - 23:30 UTC: send the concise daily LINE report.
 
+Check production scheduler state:
+
+```text
+GET /scheduler/status
+```
+
 For one-off production-style execution, run:
 
 ```bash

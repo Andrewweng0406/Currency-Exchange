@@ -1,4 +1,4 @@
-from app.scheduler.jobs import DAILY_PIPELINE, PipelineStep, run_daily_pipeline
+from app.scheduler.jobs import DAILY_PIPELINE, PipelineStep, run_daily_pipeline, scheduler_status
 
 
 def test_daily_pipeline_runs_steps_in_order(monkeypatch):
@@ -41,3 +41,8 @@ def test_daily_pipeline_records_failures_but_continues(monkeypatch):
 def test_default_daily_pipeline_ends_with_line_report():
     assert [step.name for step in DAILY_PIPELINE] == ["ingestion", "features", "models", "model_health", "line_report"]
     assert DAILY_PIPELINE[-1].args == ("--send",)
+
+
+def test_scheduler_status_disabled(monkeypatch):
+    monkeypatch.setenv("SCHEDULER_ENABLED", "false")
+    assert scheduler_status() == {"enabled": False, "running": False, "jobs": []}
