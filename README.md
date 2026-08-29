@@ -143,15 +143,14 @@ POST /line/webhook
 
 The endpoint verifies the LINE signature when `LINE_CHANNEL_SECRET` is set and returns any `source.userId` values present in webhook events.
 
-## 8. Planned Commands
-
-These commands will be added in later phases:
+## 8. Common Commands
 
 ```bash
 python scripts/run_backtest_phase3.py
 python scripts/train_models.py --horizon all
 python scripts/backtest_strategy.py
 python scripts/send_line_report.py
+python scripts/run_daily_pipeline.py
 uvicorn app.api.main:app --reload
 streamlit run dashboard/main.py
 python scripts/run_scheduler.py
@@ -159,7 +158,27 @@ python scripts/run_scheduler.py
 
 ## 9. Production Deployment Notes
 
-Use PostgreSQL in production, not SQLite. Store all secrets in environment variables. Run ingestion, prediction, alerting, and model monitoring as separate scheduled jobs so a data-provider outage does not stop the dashboard or erase historical data.
+Use PostgreSQL in production, not SQLite. Store all secrets in environment variables.
+
+On Railway, the API process can also start the production scheduler when this service variable is set:
+
+```text
+SCHEDULER_ENABLED=true
+```
+
+With the scheduler enabled, the running API container keeps the LINE webhook alive and also runs the daily jobs in UTC:
+
+- 22:30 UTC: Phase 1 data ingestion.
+- 22:45 UTC: feature build.
+- 23:00 UTC: train/persist 1D, 5D, and 20D models.
+- 23:20 UTC: model health evaluation.
+- 23:30 UTC: send the concise daily LINE report.
+
+For one-off production-style execution, run:
+
+```bash
+python scripts/run_daily_pipeline.py
+```
 
 The production scheduler should use conservative data frequencies:
 
@@ -339,7 +358,7 @@ Run scheduler:
 python scripts/run_scheduler.py
 ```
 
-Scheduled jobs use UTC internally and run ingestion, feature building, model training, monitoring, and LINE report sending.
+Scheduled jobs use UTC internally and run ingestion, feature building, model training, monitoring, and LINE report sending. In Docker/Railway the scheduler uses the container's current Python executable, so it does not require a local `.venv`.
 
 ## Docker
 

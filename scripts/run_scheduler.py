@@ -7,11 +7,10 @@ from pathlib import Path
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON = ROOT / ".venv" / "bin" / "python"
 
 
 def run_script(script: str, *args: str) -> None:
-    subprocess.run([str(PYTHON), str(ROOT / "scripts" / script), *args], cwd=ROOT, check=False)
+    subprocess.run([sys.executable, str(ROOT / "scripts" / script), *args], cwd=ROOT, check=False)
 
 
 def main() -> None:

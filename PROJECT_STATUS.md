@@ -1,6 +1,6 @@
 # Project Status
 
-Last verified: 2026-08-26 America/Los_Angeles.
+Last verified: 2026-08-29 America/Los_Angeles.
 
 Latest committed baseline before this audit: `e5e51f7 Update verified project status`.
 
@@ -44,11 +44,13 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 - Model explanation block based on logistic coefficients and XGBoost feature importance, labeled as non-causal.
 - Strategy A/B/C first-pass comparison using real walk-forward probabilities.
 - Dockerfile, `.dockerignore`, Makefile, GitHub Actions test workflow, Alembic baseline migration, and readiness checker.
+- Concise family-friendly LINE daily report deployed to Railway.
+- Production scheduler support behind `SCHEDULER_ENABLED=true`, plus `scripts/run_daily_pipeline.py` for one-off daily automation.
 
 ## Latest Local Verification
 
 ```text
-pytest: 35 passed
+pytest: 43 passed
 readiness: core checks passed
 alembic current: 20260826_0001 (head)
 ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
@@ -78,9 +80,9 @@ CBC Intervention Risk: LOW (ESTIMATED)
 
 ## Needs User Input Before Full Production Use
 
-- `LINE_CHANNEL_ACCESS_TOKEN`
-- `LINE_USER_ID`
-- `LINE_CHANNEL_SECRET`
+- ~~`LINE_CHANNEL_ACCESS_TOKEN`~~ — configured in Railway.
+- ~~`LINE_USER_ID`~~ — configured in Railway.
+- ~~`LINE_CHANNEL_SECRET`~~ — configured in Railway.
 - ~~Exact bank your family uses for TWD to USD conversion~~ — resolved: Hua Nan Commercial Bank, wired up 2026-08-26.
 - Your real planning values (deferred by user for now, run `python scripts/configure_profile.py` when ready):
   - `MONTHLY_USD_NEED`
@@ -102,4 +104,5 @@ CBC Intervention Risk: LOW (ESTIMATED)
 - Add explicit Alembic revisions for future schema changes.
 - Add calibrated tail-risk classifiers once more clean historical data is available.
 - Consider SHAP after model/data stability improves; current explainability is coefficient/gain based and non-causal.
-- Deploy API/dashboard/scheduler to a real environment after secrets and bank settings are provided.
+- Enable and monitor Railway scheduler in production with `SCHEDULER_ENABLED=true`.
+- Replace Yahoo CNH history with a more reliable FX provider before treating Asia FX pressure as high-confidence.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, Request
 from sqlalchemy import select
@@ -15,8 +16,17 @@ from app.exchange.planner import default_inputs, recommend_exchange
 from app.line.client import verify_line_signature
 from app.ops.data_quality import data_coverage_report
 from app.risk.scoring import latest_risk_snapshot
+from app.scheduler.jobs import shutdown_background_scheduler, start_background_scheduler
 
-app = FastAPI(title="TWD FX Monitor API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app_: FastAPI):
+    start_background_scheduler()
+    yield
+    shutdown_background_scheduler()
+
+
+app = FastAPI(title="TWD FX Monitor API", version="0.1.0", lifespan=lifespan)
 
 
 def _session():
