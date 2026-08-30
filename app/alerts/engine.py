@@ -9,6 +9,7 @@ from app.config import risk_policy
 from app.database.schema import Alert
 from app.database.upsert import upsert_rows
 from app.line.formatter import alert_message
+from app.ops.data_quality import DataQualitySummary
 from app.risk.scoring import RiskSnapshot
 
 
@@ -27,9 +28,22 @@ def generate_alerts(
     predictions: dict[str, dict[str, float | None]],
     latest_features: dict | None = None,
     upcoming_events: list[dict] | None = None,
+    data_quality: DataQualitySummary | None = None,
 ) -> list[AlertCandidate]:
     policy = risk_policy()["alerts"]
     alerts = []
+    if data_quality and data_quality.blocks_model_advice:
+        issue = data_quality.issues[0] if data_quality.issues else data_quality.label_zh
+        alerts.append(
+            AlertCandidate(
+                alert_type="DATA_QUALITY_WARNING",
+                severity="HIGH",
+                title="⚠️ 匯率系統資料提醒",
+                body=f"{data_quality.message_zh}\n\n主要問題：\n{issue}",
+                dedupe_key=f"DATA_QUALITY_WARNING:{data_quality.status}:{issue}",
+                risk_score=risk.twd_risk_score,
+            )
+        )
     prob_5d = predictions.get("5d", {}).get("prob_up")
     if prob_5d is not None and prob_5d >= policy["twd_depreciation_warning"]["probability_up_min"]:
         alerts.append(

@@ -8,6 +8,7 @@ from app.database.schema import Base
 from app.exchange.planner import ExchangeInputs, ExchangeRecommendation
 from app.line.client import verify_line_signature
 from app.line.formatter import daily_report
+from app.ops.data_quality import DataQualitySummary
 from app.risk.cbc import CbcInterventionRisk
 from app.risk.scoring import RiskSnapshot
 from app.risk.tail import TailRiskSnapshot
@@ -35,12 +36,14 @@ def test_daily_report_contains_required_language():
         ),
         exchange=ExchangeRecommendation("EXCHANGE_50_PERCENT", 50, 7000, 3500, 45, []),
         exchange_inputs=ExchangeInputs(target_usd_amount=10000, usd_already_held=3000),
+        data_quality=DataQualitySummary("OK", "正常", "今天核心資料正常。", False, []),
     )
     assert "美元換匯提醒" in text
     assert "主要判斷依據" in text
     assert "美元指數 DXY" in text
     assert "現在偏向適合換" in text
     assert "原因：" in text
+    assert "資料狀態：正常" in text
     assert "5天美元上漲機率約68%" in text
     assert "這是機率與風險提醒，不是保證漲跌" in text
     assert "美元需求" not in text
@@ -94,3 +97,25 @@ def test_generate_sudden_fx_and_macro_alerts():
     types = {alert.alert_type for alert in alerts}
     assert "SUDDEN_FX_MOVE" in types
     assert "MACRO_EVENT" in types
+
+
+def test_data_quality_warning_alert():
+    risk = RiskSnapshot(
+        "2026-01-01T00:00:00Z",
+        50,
+        20,
+        ["RISK_OFF"],
+        0.6,
+        [],
+        TailRiskSnapshot("5d", {}, "test"),
+        CbcInterventionRisk("LOW", True, ["test"]),
+        {"5d": []},
+    )
+    alerts = generate_alerts(
+        risk,
+        {},
+        {},
+        [],
+        DataQualitySummary("BLOCKING", "核心資料異常", "今天核心資料不完整，換匯時間建議會改為保守。", True, ["USDTWD_CLOSE 最新值缺失"]),
+    )
+    assert any(alert.alert_type == "DATA_QUALITY_WARNING" for alert in alerts)

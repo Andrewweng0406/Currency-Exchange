@@ -19,6 +19,7 @@ from app.exchange.planner import default_inputs, recommend_exchange
 from app.economic_events.importer import upcoming_event_risk
 from app.line.client import LineMessagingClient
 from app.line.formatter import daily_report
+from app.ops.data_quality import data_coverage_report, summarize_data_quality
 from app.risk.scoring import latest_risk_snapshot
 
 
@@ -32,6 +33,7 @@ def main() -> None:
     exchange = recommend_exchange(inputs, risk.twd_risk_score, risk.opportunity_score)
     predictions = _predictions(session)
     upcoming = upcoming_event_risk(session)
+    data_quality = summarize_data_quality(data_coverage_report(session))
     bank = session.execute(select(BankRate.spot_selling).order_by(BankRate.observed_at_utc.desc()).limit(1)).scalar_one_or_none()
     ai = interpret_risk_context(
         risk,
@@ -56,10 +58,11 @@ def main() -> None:
         exchange_inputs=inputs,
         upcoming_events=upcoming,
         ai_interpretation=ai,
+        data_quality=data_quality,
     )
     alerts = [
         candidate
-        for candidate in generate_alerts(risk, predictions, latest.to_dict(), upcoming)
+        for candidate in generate_alerts(risk, predictions, latest.to_dict(), upcoming, data_quality)
         if should_send_alert(session, candidate)
     ]
     if dry_run:

@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.database.schema import Base, Feature
-from app.ops.data_quality import data_coverage_report
+from app.ops.data_quality import data_coverage_report, summarize_data_quality
 
 
 def test_data_quality_reports_fail_without_rows():
@@ -30,3 +30,23 @@ def test_data_quality_checks_feature_missing_ratio():
         session.commit()
         report = data_coverage_report(session)
     assert any(item["feature"] == "USDTWD_CLOSE" for item in report["feature_quality"])
+
+
+def test_data_quality_summary_blocks_core_latest_missing():
+    report = {
+        "coverage": [{"dataset": "fx_prices:USD/TWD", "status": "OK"}],
+        "feature_quality": [{"feature": "USDTWD_CLOSE", "latest_missing": True, "status": "POOR"}],
+    }
+    summary = summarize_data_quality(report)
+    assert summary.blocks_model_advice
+    assert summary.status == "BLOCKING"
+
+
+def test_data_quality_summary_allows_nonblocking_history_limits():
+    report = {
+        "coverage": [{"dataset": "fx_prices:USD/TWD", "status": "OK"}],
+        "feature_quality": [{"feature": "CNH_CLOSE", "latest_missing": False, "status": "POOR"}],
+    }
+    summary = summarize_data_quality(report)
+    assert not summary.blocks_model_advice
+    assert summary.status == "LIMITED"

@@ -284,7 +284,8 @@ Implemented:
 - LINE Messaging API client, concise Traditional Chinese timing report, alert candidates, and dedupe logic.
 - Webhook helper endpoint for discovering `LINE_USER_ID`.
 - Exchange plans are persisted to the `exchange_plans` table.
-- Immediate alert candidates: TWD depreciation warning, sudden FX move, good exchange opportunity, and macro event notice.
+- Daily report includes a data-status line. Core data failures make timing guidance conservative.
+- Immediate alert candidates: data quality warning, TWD depreciation warning, sudden FX move, good exchange opportunity, and macro event notice.
 - Model explanation block using logistic coefficients and XGBoost gain, labeled as association rather than causation.
 
 Required from you before real LINE sending:
@@ -341,6 +342,8 @@ Audit data coverage and critical feature missingness:
 ```bash
 python scripts/data_quality_report.py
 ```
+
+The data-quality report includes a machine-readable `summary`. `BLOCKING` means core data is stale or missing and LINE timing advice should be treated conservatively. `LIMITED` means today's core data is usable, but some longer historical features remain incomplete.
 
 Import economic events from a manually prepared official-source CSV:
 

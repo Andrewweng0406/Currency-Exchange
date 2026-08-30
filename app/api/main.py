@@ -14,7 +14,7 @@ from app.database.session import make_session
 from app.economic_events.importer import upcoming_event_risk
 from app.exchange.planner import default_inputs, recommend_exchange
 from app.line.client import verify_line_signature
-from app.ops.data_quality import data_coverage_report
+from app.ops.data_quality import data_coverage_report, summarize_data_quality
 from app.risk.scoring import latest_risk_snapshot
 from app.scheduler.jobs import scheduler_status, shutdown_background_scheduler, start_background_scheduler
 
@@ -75,7 +75,9 @@ def latest_features():
 
 @app.get("/data-quality")
 def data_quality():
-    return data_coverage_report(_session())
+    report = data_coverage_report(_session())
+    report["summary"] = _dataclass_safe(summarize_data_quality(report))
+    return report
 
 
 @app.get("/scheduler/status")

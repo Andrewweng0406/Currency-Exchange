@@ -46,6 +46,7 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 - Dockerfile, `.dockerignore`, Makefile, GitHub Actions test workflow, Alembic baseline migration, and readiness checker.
 - Concise family-friendly LINE daily report deployed to Railway. The family report now focuses on timing and does not show exchange amounts or percentages.
 - Production scheduler support behind `SCHEDULER_ENABLED=true`, plus `scripts/run_daily_pipeline.py` for one-off daily automation.
+- Data-quality summary now feeds the LINE daily report and alert engine. Core data failures produce conservative timing guidance plus a deduped `DATA_QUALITY_WARNING`; nonblocking historical limitations show as "部分資料有限".
 
 ## Latest Local Verification
 

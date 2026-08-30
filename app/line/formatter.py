@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.exchange.planner import ExchangeInputs, ExchangeRecommendation
+from app.ops.data_quality import DataQualitySummary
 from app.risk.scoring import RiskSnapshot
 
 
@@ -14,6 +15,7 @@ def daily_report(
     exchange_inputs: ExchangeInputs | None = None,
     upcoming_events: list[dict] | None = None,
     ai_interpretation: object | None = None,
+    data_quality: DataQualitySummary | None = None,
 ) -> str:
     _ = ai_interpretation
     pred_lines = [
@@ -22,7 +24,8 @@ def daily_report(
         _simple_prediction_line("20天", predictions.get("20d", {})),
     ]
     reason_lines = _simple_reason_lines(risk.contributors)
-    timing_reason = _simple_timing_reason(exchange.action, predictions, risk, changes, reason_lines)
+    timing_action = _simple_timing_action(exchange.action, data_quality)
+    timing_reason = _simple_timing_reason(exchange.action, predictions, risk, changes, reason_lines, data_quality)
     event_block = _simple_event_block(upcoming_events or [])
     _ = exchange_inputs
     return (
@@ -36,13 +39,14 @@ def daily_report(
         + "\n\n━━━━━━━━━━\n\n"
         f"台幣風險：{risk.twd_risk_score}/100（{_simple_risk_label(risk.twd_risk_score)}）\n"
         f"信心：{_pct(risk.confidence)}\n\n"
+        f"{_data_quality_line(data_quality)}\n\n"
         "━━━━━━━━━━\n\n"
         "主要判斷依據\n"
         + "\n".join(reason_lines)
         + "\n\n"
         "━━━━━━━━━━\n\n"
         "換匯建議\n"
-        f"{_simple_timing_action(exchange.action)}\n"
+        f"{timing_action}\n"
         f"原因：{timing_reason}\n\n"
         f"{event_block}"
         "這是機率與風險提醒，不是保證漲跌。"
@@ -144,7 +148,15 @@ def _simple_risk_label(score: int) -> str:
     return "台幣貶值風險偏高"
 
 
-def _simple_timing_action(action: str) -> str:
+def _data_quality_line(data_quality: DataQualitySummary | None) -> str:
+    if data_quality is None:
+        return "資料狀態：未檢查"
+    return f"資料狀態：{data_quality.label_zh}"
+
+
+def _simple_timing_action(action: str, data_quality: DataQualitySummary | None = None) -> str:
+    if data_quality and data_quality.blocks_model_advice:
+        return "今天資料不完整，先不要只看模型決定。"
     labels = {
         "WAIT": "可以再等一下，現在不用急著換。",
         "EXCHANGE_25_PERCENT": "可以開始留意，若近期需要美元可考慮先換一些。",
@@ -161,7 +173,12 @@ def _simple_timing_reason(
     risk: RiskSnapshot,
     changes: dict[str, float | None],
     reason_lines: list[str],
+    data_quality: DataQualitySummary | None = None,
 ) -> str:
+    if data_quality and data_quality.blocks_model_advice:
+        issue = data_quality.issues[0] if data_quality.issues else "核心資料異常"
+        return f"{data_quality.message_zh}主要問題：{issue}。"
+
     five_day = predictions.get("5d", {})
     prob_up = five_day.get("prob_up")
     prob_down = five_day.get("prob_down")

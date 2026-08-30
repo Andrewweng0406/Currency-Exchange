@@ -30,6 +30,15 @@ class FeatureQualityCheck:
     status: str
 
 
+@dataclass(frozen=True)
+class DataQualitySummary:
+    status: str
+    label_zh: str
+    message_zh: str
+    blocks_model_advice: bool
+    issues: list[str]
+
+
 def data_coverage_report(session) -> dict[str, Any]:
     coverage = [
         _coverage(session, FxPrice, "fx_prices:USD/TWD"),
@@ -47,6 +56,54 @@ def data_coverage_report(session) -> dict[str, Any]:
         "feature_quality": [item.__dict__ for item in quality],
         "overall_status": _overall_status(coverage, quality),
     }
+
+
+def summarize_data_quality(report: dict[str, Any]) -> DataQualitySummary:
+    coverage = report.get("coverage", [])
+    quality = report.get("feature_quality", [])
+
+    blocking_issues = []
+    for item in coverage:
+        dataset = str(item.get("dataset", ""))
+        status = item.get("status")
+        if status in {"FAIL", "STALE"} and _is_core_dataset(dataset):
+            blocking_issues.append(f"{dataset} {status}")
+
+    for item in quality:
+        feature = str(item.get("feature", ""))
+        if feature in _CORE_LATEST_FEATURES and item.get("latest_missing"):
+            blocking_issues.append(f"{feature} 最新值缺失")
+
+    if blocking_issues:
+        return DataQualitySummary(
+            status="BLOCKING",
+            label_zh="核心資料異常",
+            message_zh="今天核心資料不完整，換匯時間建議會改為保守。",
+            blocks_model_advice=True,
+            issues=blocking_issues[:5],
+        )
+
+    limited_issues = [
+        f"{item.get('feature')} 長期資料有限"
+        for item in quality
+        if item.get("status") in {"POOR", "LIMITED", "MISSING_COLUMN"} and not item.get("latest_missing")
+    ]
+    if limited_issues:
+        return DataQualitySummary(
+            status="LIMITED",
+            label_zh="部分資料有限",
+            message_zh="今天核心資料可用，但部分長期歷史資料仍有限。",
+            blocks_model_advice=False,
+            issues=limited_issues[:5],
+        )
+
+    return DataQualitySummary(
+        status="OK",
+        label_zh="正常",
+        message_zh="今天核心資料正常。",
+        blocks_model_advice=False,
+        issues=[],
+    )
 
 
 def _coverage(session, model, label: str, extra_filter: Any = None) -> CoverageCheck:
@@ -138,3 +195,16 @@ def _overall_status(coverage: list[CoverageCheck], quality: list[FeatureQualityC
     if any(item.status == "LIMITED" for item in quality):
         return "LIMITED"
     return "OK"
+
+
+def _is_core_dataset(dataset: str) -> bool:
+    return dataset.startswith(("fx_prices:USD/TWD", "bank_rates:USD", "features:daily_v1", "predictions"))
+
+
+_CORE_LATEST_FEATURES = {
+    "USDTWD_CLOSE",
+    "DXY_CLOSE",
+    "US2Y_CLOSE",
+    "US10Y_CLOSE",
+    "DATA_COMPLETENESS",
+}
