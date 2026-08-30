@@ -60,6 +60,7 @@ def _write_market_data(session, source: str, symbol: str, df: pd.DataFrame) -> i
 def run(
     series_key: str = typer.Option("usd_cny", help="Key under providers.fred.series in config/settings.yaml."),
     symbol: str | None = typer.Option(None, help="Override stored market_data symbol."),
+    timeout_seconds: int | None = typer.Option(None, help="Override provider timeout for large historical CSV downloads."),
     database_url: str | None = typer.Option(None, help="Override DATABASE_URL/settings.yaml."),
 ) -> None:
     configure_logging()
@@ -70,7 +71,10 @@ def run(
         valid = ", ".join(sorted(series_map))
         raise typer.BadParameter(f"Unknown FRED series_key '{series_key}'. Valid keys: {valid}")
     stored_symbol = symbol or SYMBOL_BY_SERIES_KEY.get(series_key) or series_key.upper()
-    provider = FredCsvProvider(**_provider_kwargs(cfg))
+    provider_kwargs = _provider_kwargs(cfg)
+    if timeout_seconds is not None:
+        provider_kwargs["timeout"] = timeout_seconds
+    provider = FredCsvProvider(**provider_kwargs)
     session = make_session(database_url or cfg["database"]["url"])
     df = provider.fetch_series(series_map[series_key])
     rows = _write_market_data(session, provider.source, stored_symbol, df)

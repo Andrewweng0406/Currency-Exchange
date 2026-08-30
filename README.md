@@ -81,7 +81,7 @@ The command exits with code `2` if one or more providers fail, but successful pr
 Refresh one configured FRED series without running the full ingestion pipeline:
 
 ```bash
-python scripts/ingest_fred_series.py --series-key usd_cny
+python scripts/ingest_fred_series.py --series-key usd_cny --timeout-seconds 60
 ```
 
 ## 4. Run Tests
