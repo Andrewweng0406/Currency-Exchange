@@ -159,8 +159,8 @@ def _simple_timing_action(action: str, data_quality: DataQualitySummary | None =
         return "今天資料不完整，先不要只看模型決定。"
     labels = {
         "WAIT": "可以再等一下，現在不用急著換。",
-        "EXCHANGE_25_PERCENT": "可以開始留意，若近期需要美元可考慮先換一些。",
-        "EXCHANGE_50_PERCENT": "現在偏向適合換，建議不要全部等到之後。",
+        "EXCHANGE_25_PERCENT": "可以開始留意，現在不是太差的換匯時間。",
+        "EXCHANGE_50_PERCENT": "現在偏向適合換，近期需要美元的話可以認真考慮。",
         "EXCHANGE_75_PERCENT": "現在換匯風險偏高，近期需要美元的話建議優先處理。",
         "EXCHANGE_100_PERCENT": "時間或風險已經偏緊，近期需要美元的話建議盡快處理。",
     }

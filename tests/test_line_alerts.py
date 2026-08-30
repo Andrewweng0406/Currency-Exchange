@@ -50,6 +50,8 @@ def test_daily_report_contains_required_language():
     assert "已持有" not in text
     assert "尚缺" not in text
     assert "建議先換：約" not in text
+    assert "換一些" not in text
+    assert "換多少" not in text
     assert "預測報酬區間" not in text
     assert "模型特徵貢獻" not in text
 
