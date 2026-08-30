@@ -12,6 +12,7 @@ Implemented:
 - Provider timeout/retry handling and structured JSON logs.
 - Conservative TWSE historical backfill script for TAIEX, 2330, and foreign-flow trading dates.
 - Daily feature engineering pipeline with technical, macro-market, Asia FX, TWSE, TSMC, and data-completeness features.
+- Stale-data guardrails: market features only forward-fill for a configurable short window so old prices cannot masquerade as current data.
 - Unit tests for config, TWSE parsing, indicators, and feature building.
 - Walk-forward backtesting, 1D/5D/20D ensemble models, risk scoring, exchange planner, LINE alerts, API, dashboard, scheduler, economic event import, model monitoring, and strategy comparison.
 
@@ -347,6 +348,8 @@ python scripts/data_quality_report.py
 The data-quality report includes a machine-readable `summary`. `BLOCKING` means core data is stale or missing and LINE timing advice should be treated conservatively. `LIMITED` means today's core data is usable, but some longer historical features remain incomplete.
 
 CNH free historical data is unreliable through Yahoo Finance. The system keeps CNH as supplemental and uses FRED `DEXCHUS` USD/CNY as an onshore China FX proxy for Asia FX pressure when CNH history is unavailable. It is not labeled or treated as CNH.
+
+Market features use `features.max_market_stale_days` from `config/settings.yaml` to prevent stale forward-filled values from being treated as valid observations. The default is 7 calendar days, which tolerates weekends and holidays but flags longer source outages or historical gaps as missing data. This may make data-quality reports look stricter, but it avoids training models on silently stale TAIEX, TSMC, DXY, rates, or Asia FX values.
 
 Import economic events from a manually prepared official-source CSV:
 

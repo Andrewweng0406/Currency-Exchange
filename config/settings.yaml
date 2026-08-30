@@ -50,3 +50,6 @@ ai:
 
 scheduler:
   enabled: ${SCHEDULER_ENABLED:-false}
+
+features:
+  max_market_stale_days: 7

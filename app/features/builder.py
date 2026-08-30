@@ -10,6 +10,7 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database.schema import Feature, ForeignFlow, FxPrice, MarketData
 from app.database.upsert import upsert_rows
 from app.features.indicators import atr, bollinger_position, pct_return, rolling_volatility, rsi, zscore
@@ -85,10 +86,25 @@ def _load_foreign_flow(session: Session) -> pd.DataFrame:
     return df.groupby("date", as_index=False)["foreign_flow"].sum()
 
 
+def _market_series_with_missing_flag(
+    values: pd.Series,
+    target_index: pd.DatetimeIndex,
+    max_stale_days: int,
+) -> tuple[pd.Series, pd.Series]:
+    values = values.dropna().sort_index()
+    aligned = values.reindex(target_index).ffill()
+    observed_at = pd.Series(values.index, index=values.index).reindex(target_index).ffill()
+    stale_days = (pd.Series(target_index, index=target_index) - observed_at).dt.days
+    missing = observed_at.isna() | (stale_days > max_stale_days)
+    return aligned.mask(missing), missing.astype(int)
+
+
 def build_feature_frame(session: Session) -> pd.DataFrame:
     fx = _load_fx(session)
     if fx.empty:
         return pd.DataFrame()
+    app_settings = settings()
+    max_market_stale_days = int(app_settings.get("features", {}).get("max_market_stale_days", 7))
 
     frame = fx.set_index("date").sort_index()
     frame = frame.rename(
@@ -144,7 +160,11 @@ def build_feature_frame(session: Session) -> pd.DataFrame:
             if symbol not in close_pivot:
                 derived[f"{prefix}_DATA_MISSING"] = 1
                 continue
-            series = close_pivot[symbol].reindex(frame.index).ffill()
+            series, missing = _market_series_with_missing_flag(
+                close_pivot[symbol],
+                frame.index,
+                max_stale_days=max_market_stale_days,
+            )
             derived[f"{prefix}_CLOSE"] = series
             for window in [1, 5, 20]:
                 if prefix in {"US2Y", "US10Y", "VIX"}:
@@ -152,13 +172,14 @@ def build_feature_frame(session: Session) -> pd.DataFrame:
                 else:
                     derived[f"{prefix}_RETURN_{window}D"] = pct_return(series, window)
             derived[f"{prefix}_VOLATILITY_20D"] = rolling_volatility(series, 20)
-            derived[f"{prefix}_DATA_MISSING"] = series.isna().astype(int)
+            derived[f"{prefix}_DATA_MISSING"] = missing
         if {"US_2Y", "US_10Y"}.issubset(close_pivot.columns):
-            us2y = close_pivot["US_2Y"].reindex(frame.index).ffill()
-            us10y = close_pivot["US_10Y"].reindex(frame.index).ffill()
+            us2y, _ = _market_series_with_missing_flag(close_pivot["US_2Y"], frame.index, max_market_stale_days)
+            us10y, _ = _market_series_with_missing_flag(close_pivot["US_10Y"], frame.index, max_market_stale_days)
             derived["US_2S10S_SPREAD"] = us10y - us2y
         if "2330.TW" in volume_pivot:
-            derived["TSMC_VOLUME_ZSCORE"] = zscore(volume_pivot["2330.TW"].reindex(frame.index).ffill(), 252)
+            tsmc_volume, _ = _market_series_with_missing_flag(volume_pivot["2330.TW"], frame.index, max_market_stale_days)
+            derived["TSMC_VOLUME_ZSCORE"] = zscore(tsmc_volume, 252)
 
     foreign = _load_foreign_flow(session)
     if not foreign.empty:
