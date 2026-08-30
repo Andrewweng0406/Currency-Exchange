@@ -170,7 +170,7 @@ The endpoint verifies the LINE signature when `LINE_CHANNEL_SECRET` is set and r
 python scripts/run_backtest_phase3.py
 python scripts/train_models.py --horizon all
 python scripts/model_feature_importance.py --top-n 10
-python scripts/backtest_strategy.py
+python scripts/backtest_strategy.py --start-year 2023 --target-usd 10000
 python scripts/send_line_report.py
 python scripts/run_daily_pipeline.py
 uvicorn app.api.main:app --reload
@@ -261,16 +261,16 @@ The ensemble weights are computed from walk-forward validation metrics rather th
 Run strategy comparison:
 
 ```bash
-python scripts/backtest_strategy.py
+python scripts/backtest_strategy.py --start-year 2023 --target-usd 10000
 ```
 
-The current first-pass Strategy C uses real walk-forward 5D probabilities. It is intentionally conservative and not tuned to make the backtest look pretty. On the current local dataset, the 2023+ smoke comparison for monthly USD 10,000 needs produced:
+The current model-timing strategy uses real walk-forward 5D probabilities and exchange opportunity scores. It is intentionally conservative and not tuned to make the backtest look pretty. On the current local dataset, the 2023+ comparison for monthly USD 10,000 needs produced:
 
-- Fixed day once: average rate 31.4851, worst rate 33.1858, maximum regret NT$31,617.
-- Equal tranches: average rate 31.4944, worst rate 32.9907, maximum regret NT$14,868.
-- Risk-based strategy: average rate 31.4820, worst rate 33.0361, maximum regret NT$18,209.
+- Fixed day once: average rate 31.4847, worst rate 33.1858, maximum regret NT$31,617.
+- Equal tranches: average rate 31.4927, worst rate 32.9907, maximum regret NT$14,868.
+- Model timing once: average rate 31.4945, worst rate 33.0453, maximum regret NT$31,617.
 
-This means the first-pass risk strategy slightly improved average cost versus fixed day and materially reduced maximum regret, but it did not dominate equal tranches on regret. This should be treated as an honest baseline, not a finished optimized policy.
+This means the current model-timing strategy did not beat fixed-day exchange on average cost. It slightly improved worst rate versus fixed day, but not enough to call it a money-saving strategy. Until future validation improves, it should be presented as a risk reminder, not as proof that the system saves money.
 
 ## 12. Phase 5-7 Risk, Timing Advisor, And LINE
 

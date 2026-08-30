@@ -48,16 +48,19 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 - Production scheduler support behind `SCHEDULER_ENABLED=true`, plus `scripts/run_daily_pipeline.py` for one-off daily automation.
 - Data-quality summary now feeds the LINE daily report and alert engine. Core data failures produce conservative timing guidance plus a deduped `DATA_QUALITY_WARNING`; nonblocking historical limitations show as "部分資料有限".
 - Feature engineering now limits market-data forward-fill freshness through `features.max_market_stale_days`, so old TAIEX/TSMC/CNH/DXY/rate values cannot silently pass as current model inputs.
+- TAIEX/TSMC historical fallback through Yahoo Finance is available for periods when TWSE official endpoints are rate-limited or unavailable; source remains explicitly labeled.
+- Strategy backtest now includes an explicit `model_timing_once` pass/fail summary so the project cannot claim savings unless the validation actually supports it.
 
 ## Latest Local Verification
 
 ```text
-pytest: 43 passed
+pytest: 56 passed
 readiness: core checks passed
 alembic current: 20260826_0001 (head)
 ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
-data-quality summary: LIMITED after strict stale-data checks; CNY proxy resolves the raw CNH history gap for Asia FX pressure, but TAIEX/TSMC still need fuller historical backfill before they should be treated as high-coverage model inputs
-features: 2608 rows
+data-quality summary: OK after strict stale-data checks, CNY proxy ingestion, and TAIEX/TSMC Yahoo fallback backfill
+strategy backtest 2023+: model_timing_once did not beat fixed_day_once on average cost; it remains a risk reminder, not a proven savings strategy
+features: 2609 rows
 predictions: 3 rows
 fx_prices: 2630 rows
 market_data: 70479 rows

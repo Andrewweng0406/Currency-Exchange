@@ -68,3 +68,10 @@ alerts:
   good_exchange_opportunity:
     opportunity_score_min: 85
   macro_event_notice_hours: [24, 6, 1]
+
+strategy_backtest:
+  model_timing_once:
+    risk_probability_up_min: 0.65
+    opportunity_score_min: 75
+    favorable_probability_up_max: 0.55
+    deadline_buffer_days: 3
