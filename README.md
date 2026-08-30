@@ -270,7 +270,9 @@ The current model-timing strategy uses real walk-forward 5D probabilities and ex
 - Equal tranches: average rate 31.4927, worst rate 32.9907, maximum regret NT$14,868.
 - Model timing once: average rate 31.4945, worst rate 33.0453, maximum regret NT$31,617.
 
-This means the current model-timing strategy did not beat fixed-day exchange on average cost. It slightly improved worst rate versus fixed day, but not enough to call it a money-saving strategy. Until future validation improves, it should be presented as a risk reminder, not as proof that the system saves money.
+The strategy report includes a `summary.passed` flag. The model-timing strategy should only be considered a true improvement if it lowers average TWD cost without worsening worst-rate risk or cost volatility.
+
+This means the current local model-timing strategy did not beat fixed-day exchange on average cost. On the current production dataset after TAIEX/TSMC fallback backfill, the strategy reduced average cost by about NT$161 per USD 10,000 and improved worst rate, but cost volatility increased. Until average cost, worst-rate risk, and volatility improve together, it should be presented as a risk reminder, not as proof that the system saves money.
 
 ## 12. Phase 5-7 Risk, Timing Advisor, And LINE
 

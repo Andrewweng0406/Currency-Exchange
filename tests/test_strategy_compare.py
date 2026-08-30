@@ -49,3 +49,15 @@ def test_strategy_summary_marks_model_timing_failure_honestly():
     assert summary is not None
     assert summary.passed is False
     assert "不能宣稱能省錢" in summary.conclusion_zh
+
+
+def test_strategy_summary_requires_volatility_not_worse():
+    summary = summarize_strategy_comparison(
+        [
+            StrategyComparison("fixed_day_once", 12, 31.0, 32.0, 0.5, 1000, 0, 500, 0),
+            StrategyComparison("model_timing_once", 12, 30.9, 31.9, 0.6, 900, 1000, 400, 0.5),
+        ]
+    )
+    assert summary is not None
+    assert summary.passed is False
+    assert "成本波動沒有同步改善" in summary.conclusion_zh

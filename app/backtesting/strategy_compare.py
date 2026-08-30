@@ -90,11 +90,11 @@ def summarize_strategy_comparison(comparisons: list[StrategyComparison]) -> Stra
     average_rate_difference = model.average_rate - fixed.average_rate
     worst_rate_difference = model.worst_rate - fixed.worst_rate
     volatility_difference = model.cost_volatility - fixed.cost_volatility
-    passed = model.savings_vs_fixed_day_twd > 0 and worst_rate_difference <= 0
+    passed = model.savings_vs_fixed_day_twd > 0 and worst_rate_difference <= 0 and volatility_difference <= 0
     if passed:
-        conclusion = "模型選時策略在此回測期間優於固定日期，且沒有提高最差匯率。"
+        conclusion = "模型選時策略在此回測期間優於固定日期，且沒有提高最差匯率或成本波動。"
     elif model.savings_vs_fixed_day_twd > 0:
-        conclusion = "模型選時策略平均成本較低，但最差情境沒有同步改善，暫時不應視為全面勝出。"
+        conclusion = "模型選時策略平均成本較低，但最差情境或成本波動沒有同步改善，暫時不應視為全面勝出。"
     else:
         conclusion = "模型選時策略在此回測期間沒有打敗固定日期，目前只能作為風險提醒，不能宣稱能省錢。"
     return StrategySummary(

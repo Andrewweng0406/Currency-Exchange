@@ -59,7 +59,7 @@ readiness: core checks passed
 alembic current: 20260826_0001 (head)
 ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
 data-quality summary: OK after strict stale-data checks, CNY proxy ingestion, and TAIEX/TSMC Yahoo fallback backfill
-strategy backtest 2023+: model_timing_once did not beat fixed_day_once on average cost; it remains a risk reminder, not a proven savings strategy
+strategy backtest 2023+: local model_timing_once did not beat fixed_day_once on average cost; production backfill shows lower average cost and better worst rate but higher volatility, so it remains a risk reminder rather than a proven savings strategy
 features: 2609 rows
 predictions: 3 rows
 fx_prices: 2630 rows
