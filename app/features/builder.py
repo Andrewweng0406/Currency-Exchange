@@ -133,6 +133,7 @@ def build_feature_frame(session: Session) -> pd.DataFrame:
             "SP500": "SP500",
             "NASDAQ": "NASDAQ",
             "USD_CNH": "CNH",
+            "USD_CNY": "CNY",
             "USD_KRW": "KRW",
             "USD_JPY": "JPY",
             "TAIEX": "TAIEX",

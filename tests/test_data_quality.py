@@ -50,3 +50,16 @@ def test_data_quality_summary_allows_nonblocking_history_limits():
     summary = summarize_data_quality(report)
     assert not summary.blocks_model_advice
     assert summary.status == "LIMITED"
+
+
+def test_data_quality_summary_accepts_cny_proxy_for_cnh_history_gap():
+    report = {
+        "coverage": [{"dataset": "fx_prices:USD/TWD", "status": "OK"}],
+        "feature_quality": [
+            {"feature": "CNH_CLOSE", "latest_missing": False, "status": "POOR"},
+            {"feature": "CNY_CLOSE", "latest_missing": False, "status": "OK"},
+        ],
+    }
+    summary = summarize_data_quality(report)
+    assert summary.status == "OK"
+    assert summary.issues == []

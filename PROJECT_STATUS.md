@@ -55,7 +55,7 @@ pytest: 43 passed
 readiness: core checks passed
 alembic current: 20260826_0001 (head)
 ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
-data-quality: DEGRADED due to CNH/TAIEX/TSMC historical coverage limits
+data-quality summary: OK after local TAIEX/TSMC backfill and CNY proxy ingestion; full report still marks raw CNH history as poor
 features: 2608 rows
 predictions: 3 rows
 fx_prices: 2630 rows
@@ -96,6 +96,7 @@ CBC Intervention Risk: LOW (ESTIMATED)
 
 - Bank of Taiwan direct programmatic access returned challenge validation in local tests. Land Bank is currently used as public fallback.
 - Yahoo Finance `USDCNH=X` long history is unreliable; it should be replaced with a licensed or more reliable FX provider before heavy model reliance on CNH.
+- FRED `DEXCHUS` USD/CNY is now used only as an explicitly labeled onshore China FX proxy/fallback for Asia FX pressure when CNH history is unavailable.
 - Consensus forecasts for CPI/FOMC/NFP/etc. are not fabricated. They require official/manual entry or a reliable licensed provider.
 - Fed expectations are intentionally optional until a provider with acceptable terms is selected.
 - Taiwan monthly fundamentals are not yet automated; they should be imported by release timestamp to avoid look-ahead bias.
@@ -106,4 +107,4 @@ CBC Intervention Risk: LOW (ESTIMATED)
 - Add calibrated tail-risk classifiers once more clean historical data is available.
 - Consider SHAP after model/data stability improves; current explainability is coefficient/gain based and non-causal.
 - Enable and monitor Railway scheduler in production with `SCHEDULER_ENABLED=true`.
-- Replace Yahoo CNH history with a more reliable FX provider before treating Asia FX pressure as high-confidence.
+- Replace Yahoo CNH history with a more reliable offshore CNH FX provider before treating CNH-specific signals as high-confidence.

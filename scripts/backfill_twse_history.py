@@ -66,11 +66,29 @@ def _existing_foreign_flow_dates(session) -> set[date]:
     return {row[0].date() for row in rows}
 
 
+def _backfill_market_month(session, provider: TwseProvider, cfg: dict, month: date, sleep_seconds: float, log) -> tuple[int, int]:
+    taiex_rows = 0
+    tsmc_rows = 0
+    try:
+        taiex_rows = _write_market(session, provider, "TAIEX", provider.fetch_taiex_month(month))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("twse_taiex_month_skipped", month=month.isoformat(), error=str(exc))
+    time.sleep(sleep_seconds)
+    try:
+        tsmc_rows = _write_market(
+            session, provider, "2330.TW", provider.fetch_stock_month(cfg["providers"]["twse"]["tsmc_stock_no"], month)
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("twse_tsmc_month_skipped", month=month.isoformat(), error=str(exc))
+    return taiex_rows, tsmc_rows
+
+
 @cli.command()
 def run(
     years: int = typer.Option(1, help="Years to backfill conservatively."),
     include_foreign_flow: bool = typer.Option(True, help="Backfill daily T86 foreign-flow endpoint."),
     sleep_seconds: float = typer.Option(0.5, help="Delay between TWSE requests."),
+    max_consecutive_empty_months: int = typer.Option(3, help="Stop after this many empty/failed market months."),
 ) -> None:
     configure_logging()
     log = structlog.get_logger()
@@ -84,12 +102,21 @@ def run(
     end = date.today()
     start = end - timedelta(days=365 * years + 31)
 
+    consecutive_empty_months = 0
     for month in month_starts(start, end):
-        taiex_rows = _write_market(session, provider, "TAIEX", provider.fetch_taiex_month(month))
-        tsmc_rows = _write_market(
-            session, provider, "2330.TW", provider.fetch_stock_month(cfg["providers"]["twse"]["tsmc_stock_no"], month)
-        )
+        taiex_rows, tsmc_rows = _backfill_market_month(session, provider, cfg, month, sleep_seconds, log)
         log.info("twse_month_backfilled", month=month.isoformat(), taiex_rows=taiex_rows, tsmc_rows=tsmc_rows)
+        if taiex_rows == 0 and tsmc_rows == 0:
+            consecutive_empty_months += 1
+            if consecutive_empty_months >= max_consecutive_empty_months:
+                log.warning(
+                    "twse_backfill_stopped_after_empty_months",
+                    consecutive_empty_months=consecutive_empty_months,
+                    last_month=month.isoformat(),
+                )
+                break
+        else:
+            consecutive_empty_months = 0
         time.sleep(sleep_seconds)
 
     if include_foreign_flow:

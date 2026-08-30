@@ -83,11 +83,14 @@ def summarize_data_quality(report: dict[str, Any]) -> DataQualitySummary:
             issues=blocking_issues[:5],
         )
 
-    limited_issues = [
-        f"{item.get('feature')} 長期資料有限"
-        for item in quality
-        if item.get("status") in {"POOR", "LIMITED", "MISSING_COLUMN"} and not item.get("latest_missing")
-    ]
+    cny_proxy_ok = any(item.get("feature") == "CNY_CLOSE" and item.get("status") == "OK" for item in quality)
+    limited_issues = []
+    for item in quality:
+        feature = item.get("feature")
+        if feature == "CNH_CLOSE" and cny_proxy_ok:
+            continue
+        if item.get("status") in {"POOR", "LIMITED", "MISSING_COLUMN"} and not item.get("latest_missing"):
+            limited_issues.append(f"{feature} 長期資料有限")
     if limited_issues:
         return DataQualitySummary(
             status="LIMITED",
@@ -152,9 +155,10 @@ def _feature_quality(features: pd.DataFrame) -> list[FeatureQualityCheck]:
         "VIX_CLOSE",
         "SP500_CLOSE",
         "NASDAQ_CLOSE",
+        "CNH_CLOSE",
+        "CNY_CLOSE",
         "KRW_CLOSE",
         "JPY_CLOSE",
-        "CNH_CLOSE",
         "TAIEX_CLOSE",
         "TSMC_CLOSE",
         "FOREIGN_FLOW_5D",

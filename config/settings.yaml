@@ -26,6 +26,7 @@ providers:
       sp500: SP500
       nasdaq: NASDAQCOM
       broad_usd_index: DTWEXBGS
+      usd_cny: DEXCHUS
   yahoo:
     enabled: true
     period_years: 10
