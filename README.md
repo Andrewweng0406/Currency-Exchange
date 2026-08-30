@@ -84,6 +84,13 @@ Refresh one configured FRED series without running the full ingestion pipeline:
 python scripts/ingest_fred_series.py --series-key usd_cny --timeout-seconds 60
 ```
 
+If the production runtime can reach the database but times out when downloading a large FRED CSV, stream the official CSV from a machine with working FRED access:
+
+```bash
+curl -fsS "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DEXCHUS" \
+  | python scripts/ingest_fred_series.py --series-key usd_cny --csv-path -
+```
+
 ## 4. Run Tests
 
 ```bash

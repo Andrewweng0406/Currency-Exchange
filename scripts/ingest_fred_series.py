@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from io import StringIO
 from pathlib import Path
 
 import pandas as pd
@@ -56,11 +57,22 @@ def _write_market_data(session, source: str, symbol: str, df: pd.DataFrame) -> i
     return upsert_rows(session, MarketData, rows, ("symbol", "observed_at_utc", "source"))
 
 
+def _parse_fred_csv(csv_text: str, series_id: str) -> pd.DataFrame:
+    df = pd.read_csv(StringIO(csv_text))
+    df = df.rename(columns={"observation_date": "date", series_id: "value"})
+    df["date"] = pd.to_datetime(df["date"], utc=True)
+    df["value"] = pd.to_numeric(df["value"].replace(".", pd.NA), errors="coerce")
+    df = df.dropna(subset=["value"])
+    df["symbol"] = series_id
+    return df[["date", "symbol", "value"]]
+
+
 @cli.command()
 def run(
     series_key: str = typer.Option("usd_cny", help="Key under providers.fred.series in config/settings.yaml."),
     symbol: str | None = typer.Option(None, help="Override stored market_data symbol."),
     timeout_seconds: int | None = typer.Option(None, help="Override provider timeout for large historical CSV downloads."),
+    csv_path: str | None = typer.Option(None, help="Read a FRED CSV from a local path, or '-' for stdin."),
     database_url: str | None = typer.Option(None, help="Override DATABASE_URL/settings.yaml."),
 ) -> None:
     configure_logging()
@@ -71,13 +83,20 @@ def run(
         valid = ", ".join(sorted(series_map))
         raise typer.BadParameter(f"Unknown FRED series_key '{series_key}'. Valid keys: {valid}")
     stored_symbol = symbol or SYMBOL_BY_SERIES_KEY.get(series_key) or series_key.upper()
-    provider_kwargs = _provider_kwargs(cfg)
-    if timeout_seconds is not None:
-        provider_kwargs["timeout"] = timeout_seconds
-    provider = FredCsvProvider(**provider_kwargs)
+    provider = None
     session = make_session(database_url or cfg["database"]["url"])
-    df = provider.fetch_series(series_map[series_key])
-    rows = _write_market_data(session, provider.source, stored_symbol, df)
+    if csv_path:
+        csv_text = sys.stdin.read() if csv_path == "-" else Path(csv_path).read_text(encoding="utf-8")
+        df = _parse_fred_csv(csv_text, series_map[series_key])
+        source = "fred_csv"
+    else:
+        provider_kwargs = _provider_kwargs(cfg)
+        if timeout_seconds is not None:
+            provider_kwargs["timeout"] = timeout_seconds
+        provider = FredCsvProvider(**provider_kwargs)
+        df = provider.fetch_series(series_map[series_key])
+        source = provider.source
+    rows = _write_market_data(session, source, stored_symbol, df)
     log.info(
         "fred_series_ingested",
         series_key=series_key,
