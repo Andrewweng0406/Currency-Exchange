@@ -197,6 +197,8 @@ def _simple_timing_reason(
             return f"模型偏向美元短期走強，5天美元上漲機率約{_pct(prob_up)}；{main_reason}。"
         if change_5d is not None and change_5d > 0:
             return f"近期美元已有上漲跡象，等太久可能遇到更貴匯率；{main_reason}。"
+        if risk.twd_risk_score <= 40:
+            return f"台幣風險分數偏低，但目前匯率條件可以開始留意；{main_reason}。"
         return f"台幣風險開始升高，近期要用美元時不建議完全等待；{main_reason}。"
 
     if risk.twd_risk_score >= 80:

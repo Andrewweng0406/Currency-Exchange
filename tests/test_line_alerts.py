@@ -56,6 +56,30 @@ def test_daily_report_contains_required_language():
     assert "模型特徵貢獻" not in text
 
 
+def test_low_risk_timing_reason_does_not_claim_risk_is_rising():
+    text = daily_report(
+        current_usdtwd=31.42,
+        bank_spot_selling=31.47,
+        changes={"5d": -0.006},
+        predictions={"5d": {"prob_up": 0.28, "prob_down": 0.72}},
+        risk=RiskSnapshot(
+            "2026-01-01T00:00:00Z",
+            35,
+            70,
+            [],
+            0.85,
+            [{"name": "prediction_5d", "contribution": 2}],
+            TailRiskSnapshot("5d", {}, "test"),
+            CbcInterventionRisk("LOW", True, []),
+            {"5d": []},
+        ),
+        exchange=ExchangeRecommendation("EXCHANGE_25_PERCENT", 25, 10000, 2500, 35, []),
+        data_quality=DataQualitySummary("OK", "正常", "今天核心資料正常。", False, []),
+    )
+    assert "風險開始升高" not in text
+    assert "匯率條件可以開始留意" in text
+
+
 def test_alert_dedupe():
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(engine)
