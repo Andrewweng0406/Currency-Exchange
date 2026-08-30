@@ -111,6 +111,12 @@ This uses official TWSE endpoints conservatively. It first backfills monthly TAI
 python scripts/backfill_twse_history.py --years 1 --sleep-seconds 0.5
 ```
 
+When TWSE is rate-limited or unavailable, use Yahoo Finance as a clearly labeled fallback for TAIEX/2330 history:
+
+```bash
+python scripts/backfill_twse_history.py --years 10 --no-include-foreign-flow --no-twse-enabled --sleep-seconds 0
+```
+
 The script is resumable: existing foreign-flow dates are skipped.
 
 ## 6. Build Features
@@ -163,6 +169,7 @@ The endpoint verifies the LINE signature when `LINE_CHANNEL_SECRET` is set and r
 ```bash
 python scripts/run_backtest_phase3.py
 python scripts/train_models.py --horizon all
+python scripts/model_feature_importance.py --top-n 10
 python scripts/backtest_strategy.py
 python scripts/send_line_report.py
 python scripts/run_daily_pipeline.py
@@ -235,6 +242,12 @@ Current model command:
 
 ```bash
 python scripts/train_models.py --horizon all
+```
+
+After training, inspect the current model drivers:
+
+```bash
+python scripts/model_feature_importance.py --top-n 10
 ```
 
 For each horizon (`1d`, `5d`, `20d`) it trains:

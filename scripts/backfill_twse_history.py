@@ -17,6 +17,7 @@ from app.database.session import make_session
 from app.database.upsert import upsert_rows
 from app.logging import configure_logging
 from app.providers.twse import TwseProvider
+from app.providers.yahoo import YahooFinanceProvider
 
 cli = typer.Typer(help="Conservative TWSE historical backfill.")
 
@@ -33,11 +34,11 @@ def month_starts(start: date, end: date) -> list[date]:
     return values
 
 
-def _write_market(session, provider: TwseProvider, symbol: str, df):
+def _write_market(session, source: str, symbol: str, df):
     rows = [
         {
             "observed_at_utc": row["date"],
-            "source": provider.source,
+            "source": source,
             "symbol": symbol,
             "open": row.get("open"),
             "high": row.get("high"),
@@ -66,20 +67,54 @@ def _existing_foreign_flow_dates(session) -> set[date]:
     return {row[0].date() for row in rows}
 
 
-def _backfill_market_month(session, provider: TwseProvider, cfg: dict, month: date, sleep_seconds: float, log) -> tuple[int, int]:
+def _month_slice(df, month: date):
+    if df is None or df.empty:
+        return df
+    dates = df["date"].dt.date
+    return df[(dates >= month) & (dates < _next_month(month))]
+
+
+def _next_month(month: date) -> date:
+    if month.month == 12:
+        return date(month.year + 1, 1, 1)
+    return date(month.year, month.month + 1, 1)
+
+
+def _backfill_market_month(
+    session,
+    provider: TwseProvider,
+    cfg: dict,
+    month: date,
+    sleep_seconds: float,
+    log,
+    yahoo_cache: dict[str, object] | None = None,
+    twse_enabled: bool = True,
+) -> tuple[int, int]:
     taiex_rows = 0
     tsmc_rows = 0
-    try:
-        taiex_rows = _write_market(session, provider, "TAIEX", provider.fetch_taiex_month(month))
-    except Exception as exc:  # noqa: BLE001
-        log.warning("twse_taiex_month_skipped", month=month.isoformat(), error=str(exc))
+    if twse_enabled:
+        try:
+            taiex_rows = _write_market(session, provider.source, "TAIEX", provider.fetch_taiex_month(month))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("twse_taiex_month_skipped", month=month.isoformat(), error=str(exc))
+    if taiex_rows == 0:
+        yahoo_rows = _month_slice((yahoo_cache or {}).get("TAIEX"), month)
+        if yahoo_rows is not None and not yahoo_rows.empty:
+            taiex_rows = _write_market(session, "yahoo_finance", "TAIEX", yahoo_rows)
+            log.info("yahoo_taiex_month_backfilled", month=month.isoformat(), rows=taiex_rows)
     time.sleep(sleep_seconds)
-    try:
-        tsmc_rows = _write_market(
-            session, provider, "2330.TW", provider.fetch_stock_month(cfg["providers"]["twse"]["tsmc_stock_no"], month)
-        )
-    except Exception as exc:  # noqa: BLE001
-        log.warning("twse_tsmc_month_skipped", month=month.isoformat(), error=str(exc))
+    if twse_enabled:
+        try:
+            tsmc_rows = _write_market(
+                session, provider.source, "2330.TW", provider.fetch_stock_month(cfg["providers"]["twse"]["tsmc_stock_no"], month)
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("twse_tsmc_month_skipped", month=month.isoformat(), error=str(exc))
+    if tsmc_rows == 0:
+        yahoo_rows = _month_slice((yahoo_cache or {}).get("2330.TW"), month)
+        if yahoo_rows is not None and not yahoo_rows.empty:
+            tsmc_rows = _write_market(session, "yahoo_finance", "2330.TW", yahoo_rows)
+            log.info("yahoo_tsmc_month_backfilled", month=month.isoformat(), rows=tsmc_rows)
     return taiex_rows, tsmc_rows
 
 
@@ -89,6 +124,8 @@ def run(
     include_foreign_flow: bool = typer.Option(True, help="Backfill daily T86 foreign-flow endpoint."),
     sleep_seconds: float = typer.Option(0.5, help="Delay between TWSE requests."),
     max_consecutive_empty_months: int = typer.Option(3, help="Stop after this many empty/failed market months."),
+    yahoo_fallback: bool = typer.Option(True, help="Use Yahoo Finance fallback for TAIEX/2330 months when TWSE is unavailable."),
+    twse_enabled: bool = typer.Option(True, help="Try TWSE official monthly endpoints before Yahoo fallback."),
 ) -> None:
     configure_logging()
     log = structlog.get_logger()
@@ -101,10 +138,12 @@ def run(
     )
     end = date.today()
     start = end - timedelta(days=365 * years + 31)
+    yahoo_cache = _load_yahoo_market_cache(years, log) if yahoo_fallback else {}
 
     consecutive_empty_months = 0
     for month in month_starts(start, end):
-        taiex_rows, tsmc_rows = _backfill_market_month(session, provider, cfg, month, sleep_seconds, log)
+        log.info("twse_market_month_started", month=month.isoformat(), twse_enabled=twse_enabled, yahoo_fallback=bool(yahoo_cache))
+        taiex_rows, tsmc_rows = _backfill_market_month(session, provider, cfg, month, sleep_seconds, log, yahoo_cache, twse_enabled)
         log.info("twse_month_backfilled", month=month.isoformat(), taiex_rows=taiex_rows, tsmc_rows=tsmc_rows)
         if taiex_rows == 0 and tsmc_rows == 0:
             consecutive_empty_months += 1
@@ -141,6 +180,19 @@ def run(
             except Exception as exc:  # noqa: BLE001
                 log.warning("twse_foreign_flow_skipped", date=current.isoformat(), error=str(exc))
             time.sleep(sleep_seconds)
+
+
+def _load_yahoo_market_cache(years: int, log) -> dict[str, object]:
+    provider = YahooFinanceProvider()
+    cache = {}
+    symbols = {"TAIEX": "^TWII", "2330.TW": "2330.TW"}
+    for stored_symbol, yahoo_symbol in symbols.items():
+        try:
+            cache[stored_symbol] = provider.fetch_ohlcv(yahoo_symbol, years=years)
+            log.info("yahoo_market_history_loaded", symbol=stored_symbol, yahoo_symbol=yahoo_symbol, rows=len(cache[stored_symbol]))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("yahoo_market_history_unavailable", symbol=stored_symbol, yahoo_symbol=yahoo_symbol, error=str(exc))
+    return cache
 
 
 if __name__ == "__main__":
