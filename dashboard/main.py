@@ -14,6 +14,7 @@ from app.config import settings
 from app.database.schema import BankRate, Prediction
 from app.database.session import make_session
 from app.exchange.planner import ExchangeInputs, recommend_exchange
+from app.line.family_reasons import family_reasons
 from app.risk.scoring import latest_risk_snapshot
 from sqlalchemy import select
 
@@ -84,8 +85,9 @@ tab2.plotly_chart(px.line(chart_df, x="date", y="DXY_CLOSE"), use_container_widt
 tab3.plotly_chart(px.line(chart_df, x="date", y="US2Y_CLOSE"), use_container_width=True)
 tab4.plotly_chart(px.bar(chart_df.tail(120), x="date", y="FOREIGN_FLOW_5D"), use_container_width=True)
 
-st.subheader("Top Contributors")
-st.dataframe(risk.contributors, use_container_width=True)
+st.subheader("主要判斷依據")
+reason_rows = [reason.__dict__ for reason in family_reasons(latest.to_dict())]
+st.dataframe(reason_rows, use_container_width=True)
 
 st.subheader("Strategy Backtest")
 bt_col1, bt_col2, bt_col3 = st.columns(3)

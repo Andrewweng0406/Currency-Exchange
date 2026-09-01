@@ -59,6 +59,7 @@ def main() -> None:
         upcoming_events=upcoming,
         ai_interpretation=ai,
         data_quality=data_quality,
+        market_snapshot=latest.to_dict(),
     )
     alerts = [
         candidate

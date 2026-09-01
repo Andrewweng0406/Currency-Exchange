@@ -296,6 +296,15 @@ python scripts/generate_decision.py
 
 Configure the optional planner profile if you want deadline awareness. The family-facing LINE report does not show dollar amounts or percentages; it only says whether the timing looks favorable, neutral, or risky.
 
+The family-facing report explains the timing call with a short ranked list of human-readable market inputs instead of model internals. The current reason groups are:
+
+- 美元指數 DXY / broad USD index.
+- 美國2年債利率.
+- 外資買賣超台股.
+- 台股與台積電.
+- 人民幣、韓元、日圓亞洲貨幣壓力.
+- VIX / 美股全球風險情緒.
+
 ```bash
 python scripts/configure_profile.py \
   --target-usd-amount 10000 \
@@ -323,7 +332,7 @@ Implemented:
 - Exchange Opportunity Score from USD/TWD percentile over 20D, 60D, 120D, and 252D.
 - Market regimes: `RISK_ON`, `RISK_OFF`, `USD_STRONG`, `USD_WEAK`, `HIGH_VOL`, `LOW_VOL`, `TWD_IDIOSYNCRATIC`.
 - Timing advisor internally maps risk to `WAIT`, `EXCHANGE_25_PERCENT`, `EXCHANGE_50_PERCENT`, `EXCHANGE_75_PERCENT`, or `EXCHANGE_100_PERCENT`, but family-facing messages only describe timing, not amount.
-- LINE Messaging API client, concise Traditional Chinese timing report, alert candidates, and dedupe logic.
+- LINE Messaging API client, concise Traditional Chinese timing report, family-friendly reason ranking, alert candidates, and dedupe logic.
 - Webhook helper endpoint for discovering `LINE_USER_ID`.
 - Exchange plans are persisted to the `exchange_plans` table.
 - Daily report includes a data-status line. Core data failures make timing guidance conservative.

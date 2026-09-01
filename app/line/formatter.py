@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.exchange.planner import ExchangeInputs, ExchangeRecommendation
+from app.line.family_reasons import family_reason_lines
 from app.ops.data_quality import DataQualitySummary
 from app.risk.scoring import RiskSnapshot
 
@@ -16,6 +17,7 @@ def daily_report(
     upcoming_events: list[dict] | None = None,
     ai_interpretation: object | None = None,
     data_quality: DataQualitySummary | None = None,
+    market_snapshot: dict | None = None,
 ) -> str:
     _ = ai_interpretation
     pred_lines = [
@@ -23,7 +25,7 @@ def daily_report(
         _simple_prediction_line("5天", predictions.get("5d", {})),
         _simple_prediction_line("20天", predictions.get("20d", {})),
     ]
-    reason_lines = _simple_reason_lines(risk.contributors)
+    reason_lines = family_reason_lines(market_snapshot) if market_snapshot else _simple_reason_lines(risk.contributors)
     timing_action = _simple_timing_action(exchange.action, data_quality)
     timing_reason = _simple_timing_reason(exchange.action, predictions, risk, changes, reason_lines, data_quality)
     event_block = _simple_event_block(upcoming_events or [])

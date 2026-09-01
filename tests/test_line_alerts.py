@@ -37,10 +37,23 @@ def test_daily_report_contains_required_language():
         exchange=ExchangeRecommendation("EXCHANGE_50_PERCENT", 50, 7000, 3500, 45, []),
         exchange_inputs=ExchangeInputs(target_usd_amount=10000, usd_already_held=3000),
         data_quality=DataQualitySummary("OK", "正常", "今天核心資料正常。", False, []),
+        market_snapshot={
+            "DXY_RETURN_5D": 0.012,
+            "US2Y_CHANGE_5D": 0.12,
+            "FOREIGN_FLOW_ZSCORE": -1.2,
+            "TAIEX_RETURN_5D": -0.02,
+            "TSMC_RETURN_5D": -0.03,
+            "CNH_RETURN_5D": 0.006,
+            "KRW_RETURN_5D": 0.008,
+            "JPY_RETURN_5D": 0.004,
+        },
     )
     assert "美元換匯提醒" in text
     assert "主要判斷依據" in text
     assert "美元指數 DXY" in text
+    assert "美國2年債" in text
+    assert "外資" in text
+    assert "PREDICTION" not in text
     assert "現在偏向適合換" in text
     assert "原因：" in text
     assert "資料狀態：正常" in text

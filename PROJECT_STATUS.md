@@ -51,11 +51,12 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 - TAIEX/TSMC historical fallback through Yahoo Finance is available for periods when TWSE official endpoints are rate-limited or unavailable; source remains explicitly labeled.
 - Strategy backtest now includes an explicit `model_timing_once` pass/fail summary so the project cannot claim savings unless the validation actually supports it.
 - Strategy threshold walk-forward tuning now tests each year with policies selected only from prior years, and is exposed through CLI, API, and dashboard.
+- Family-facing LINE and dashboard reasons now rank plain-language market inputs such as DXY, US 2Y, foreign flow, Taiwan equities, Asia FX, and VIX instead of exposing model-internal feature names.
 
 ## Latest Local Verification
 
 ```text
-pytest: 63 passed
+pytest: 65 passed
 readiness: core checks passed
 alembic current: 20260826_0001 (head)
 ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
