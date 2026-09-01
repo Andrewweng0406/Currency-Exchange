@@ -171,6 +171,7 @@ python scripts/run_backtest_phase3.py
 python scripts/train_models.py --horizon all
 python scripts/model_feature_importance.py --top-n 10
 python scripts/backtest_strategy.py --start-year 2023 --target-usd 10000
+python scripts/backtest_strategy.py --start-year 2023 --target-usd 10000 --tune
 python scripts/send_line_report.py
 python scripts/run_daily_pipeline.py
 uvicorn app.api.main:app --reload
@@ -262,9 +263,12 @@ Run strategy comparison:
 
 ```bash
 python scripts/backtest_strategy.py --start-year 2023 --target-usd 10000
+python scripts/backtest_strategy.py --start-year 2023 --target-usd 10000 --tune
 ```
 
-The current model-timing strategy uses real walk-forward 5D probabilities and exchange opportunity scores. It is intentionally conservative and not tuned to make the backtest look pretty. On the current local dataset, the 2023+ comparison for monthly USD 10,000 needs produced:
+The `--tune` mode performs walk-forward threshold selection: each test year uses only prior years to choose the policy thresholds, then evaluates the next year. This avoids picking parameters with knowledge of the future.
+
+The current model-timing strategy uses real walk-forward 5D probabilities and exchange opportunity scores. It is intentionally conservative and not tuned to make the backtest look pretty. On the current local dataset, the 2023+ fixed-policy comparison for monthly USD 10,000 needs produced:
 
 - Fixed day once: average rate 31.4847, worst rate 33.1858, maximum regret NT$31,617.
 - Equal tranches: average rate 31.4927, worst rate 32.9907, maximum regret NT$14,868.
@@ -273,6 +277,14 @@ The current model-timing strategy uses real walk-forward 5D probabilities and ex
 The strategy report includes a `summary.passed` flag. The model-timing strategy should only be considered a true improvement if it lowers average TWD cost without worsening worst-rate risk or cost volatility.
 
 This means the current local model-timing strategy did not beat fixed-day exchange on average cost. On the current production dataset after TAIEX/TSMC fallback backfill, the strategy reduced average cost by about NT$161 per USD 10,000 and improved worst rate, but cost volatility increased. Until average cost, worst-rate risk, and volatility improve together, it should be presented as a risk reminder, not as proof that the system saves money.
+
+The API exposes the same report at:
+
+```text
+GET /backtests/strategy?start_year=2023&target_usd=10000&tune=true
+```
+
+The Streamlit dashboard includes a Strategy Backtest section with pass/fail status, savings versus fixed date, and per-year tuned policies.
 
 ## 12. Phase 5-7 Risk, Timing Advisor, And LINE
 

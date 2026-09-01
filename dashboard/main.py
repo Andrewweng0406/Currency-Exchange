@@ -9,6 +9,7 @@ import streamlit as st
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.backtesting.dataset import load_feature_frame
+from app.backtesting.strategy_compare import compare_exchange_strategies, summarize_strategy_comparison, walk_forward_tune_strategy
 from app.config import settings
 from app.database.schema import BankRate, Prediction
 from app.database.session import make_session
@@ -85,3 +86,24 @@ tab4.plotly_chart(px.bar(chart_df.tail(120), x="date", y="FOREIGN_FLOW_5D"), use
 
 st.subheader("Top Contributors")
 st.dataframe(risk.contributors, use_container_width=True)
+
+st.subheader("Strategy Backtest")
+bt_col1, bt_col2, bt_col3 = st.columns(3)
+backtest_start_year = bt_col1.number_input("Start year", min_value=2021, max_value=2026, value=2023, step=1)
+backtest_target = bt_col2.number_input("USD need", min_value=1000, max_value=100000, value=10000, step=1000)
+use_tuning = bt_col3.checkbox("Walk-forward tuning", value=True)
+if use_tuning:
+    tuned = walk_forward_tune_strategy(session, target_usd=float(backtest_target), start_year=int(backtest_start_year))
+    summary = tuned.summary
+    years = [year.__dict__ | {"policy": year.policy.__dict__} for year in tuned.years]
+    if summary:
+        st.metric("Tuned Strategy", "PASS" if summary.passed else "NOT YET", f"NT$ {summary.savings_vs_fixed_day_twd:,.0f}")
+        st.caption(summary.conclusion_zh)
+    st.dataframe(years, use_container_width=True)
+else:
+    comparisons = compare_exchange_strategies(session, target_usd=float(backtest_target), start_year=int(backtest_start_year))
+    summary = summarize_strategy_comparison(comparisons)
+    if summary:
+        st.metric("Model Timing", "PASS" if summary.passed else "NOT YET", f"NT$ {summary.savings_vs_fixed_day_twd:,.0f}")
+        st.caption(summary.conclusion_zh)
+    st.dataframe([item.__dict__ for item in comparisons], use_container_width=True)

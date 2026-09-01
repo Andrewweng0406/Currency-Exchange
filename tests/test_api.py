@@ -22,3 +22,12 @@ def test_ai_latest_empty_database():
     response = client.get("/ai/latest")
     assert response.status_code == 200
     assert response.json()["provider"] == "openai"
+
+
+def test_strategy_backtest_endpoint_returns_expected_shape():
+    client = TestClient(app)
+    response = client.get("/backtests/strategy")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "summary" in payload
+    assert "strategies" in payload

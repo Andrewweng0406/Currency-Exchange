@@ -75,3 +75,8 @@ strategy_backtest:
     opportunity_score_min: 75
     favorable_probability_up_max: 0.55
     deadline_buffer_days: 3
+  tuning_grid:
+    risk_probability_up_min: [0.60, 0.65, 0.70]
+    opportunity_score_min: [65, 75, 85]
+    favorable_probability_up_max: [0.50, 0.55]
+    deadline_buffer_days: [2, 3, 5]

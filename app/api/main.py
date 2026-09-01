@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.ai.openai_interpreter import latest_ai_interpretation
 from app.backtesting.dataset import load_feature_frame
+from app.backtesting.strategy_compare import compare_exchange_strategies, summarize_strategy_comparison, walk_forward_tune_strategy
 from app.config import settings
 from app.database.schema import BankRate, Prediction
 from app.database.session import make_session
@@ -83,6 +84,18 @@ def data_quality():
 @app.get("/scheduler/status")
 def scheduler_status_endpoint():
     return scheduler_status()
+
+
+@app.get("/backtests/strategy")
+def strategy_backtest(start_year: int = 2023, target_usd: float = 10_000, tune: bool = False):
+    session = _session()
+    if tune:
+        return _dataclass_safe(walk_forward_tune_strategy(session, target_usd=target_usd, start_year=start_year))
+    comparisons = compare_exchange_strategies(session, target_usd=target_usd, start_year=start_year)
+    return {
+        "summary": _dataclass_safe(summarize_strategy_comparison(comparisons)),
+        "strategies": _dataclass_safe(comparisons),
+    }
 
 
 @app.get("/ai/latest")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import product
 
 import pandas as pd
 
@@ -35,6 +36,37 @@ class StrategySummary:
     conclusion_zh: str
 
 
+@dataclass(frozen=True)
+class TimingPolicy:
+    risk_probability_up_min: float
+    opportunity_score_min: float
+    favorable_probability_up_max: float
+    deadline_buffer_days: int
+
+
+@dataclass(frozen=True)
+class TunedPolicyYear:
+    test_year: int
+    policy: TimingPolicy
+    train_payments: int
+    test_payments: int
+    train_score: float
+    test_savings_vs_fixed_day_twd: float
+    test_average_rate_difference: float
+    test_worst_rate_difference: float
+    test_volatility_difference: float
+    test_beat_fixed_rate: float
+    passed: bool
+
+
+@dataclass(frozen=True)
+class WalkForwardTuningResult:
+    start_year: int
+    target_usd: float
+    years: list[TunedPolicyYear]
+    summary: StrategySummary | None
+
+
 def compare_exchange_strategies(session, target_usd: float = 10_000, start_year: int = 2023) -> list[StrategyComparison]:
     predictions = walk_forward_probabilities(session, "5d")
     if predictions.empty:
@@ -44,20 +76,76 @@ def compare_exchange_strategies(session, target_usd: float = 10_000, start_year:
     predictions = predictions[pd.to_datetime(predictions["date"], utc=True).dt.year >= start_year].copy()
     if predictions.empty:
         return []
-    payments = predictions.groupby([predictions["date"].dt.year, predictions["date"].dt.month]).tail(1)["date"].tolist()
+    return _compare_from_predictions(predictions, target_usd)
+
+
+def walk_forward_tune_strategy(session, target_usd: float = 10_000, start_year: int = 2023, min_train_years: int = 2) -> WalkForwardTuningResult:
+    predictions = walk_forward_probabilities(session, "5d")
+    if predictions.empty:
+        return WalkForwardTuningResult(start_year=start_year, target_usd=target_usd, years=[], summary=None)
+    predictions["date"] = pd.to_datetime(predictions["date"], utc=True)
+    predictions["opportunity_score"] = _expanding_opportunity_scores(predictions)
+    years = sorted(int(year) for year in predictions["date"].dt.year.unique() if int(year) >= start_year)
+    tuned_years = []
+    combined_records = {"fixed_day_once": [], "equal_tranches": [], "model_timing_once": []}
+    for year in years:
+        train = predictions[predictions["date"].dt.year < year]
+        if train["date"].dt.year.nunique() < min_train_years:
+            continue
+        test = predictions[predictions["date"].dt.year == year]
+        policy, train_score, train_payments = _select_policy(train, target_usd)
+        test_records = _strategy_records(test, target_usd, policy)
+        comparisons = _comparisons_from_records(test_records, target_usd)
+        summary = summarize_strategy_comparison(comparisons)
+        if summary is None:
+            continue
+        for name, values in test_records.items():
+            combined_records[name].extend(values)
+        tuned_years.append(
+            TunedPolicyYear(
+                test_year=year,
+                policy=policy,
+                train_payments=train_payments,
+                test_payments=next((item.payments for item in comparisons if item.strategy == "model_timing_once"), 0),
+                train_score=train_score,
+                test_savings_vs_fixed_day_twd=summary.savings_vs_fixed_day_twd,
+                test_average_rate_difference=summary.average_rate_difference,
+                test_worst_rate_difference=summary.worst_rate_difference,
+                test_volatility_difference=summary.volatility_difference,
+                test_beat_fixed_rate=summary.beat_fixed_rate,
+                passed=summary.passed,
+            )
+        )
+    combined_summary = summarize_strategy_comparison(_comparisons_from_records(combined_records, target_usd))
+    return WalkForwardTuningResult(start_year=start_year, target_usd=target_usd, years=tuned_years, summary=combined_summary)
+
+
+def _compare_from_predictions(predictions: pd.DataFrame, target_usd: float, policy: TimingPolicy | None = None) -> list[StrategyComparison]:
+    return _comparisons_from_records(_strategy_records(predictions, target_usd, policy), target_usd)
+
+
+def _strategy_records(predictions: pd.DataFrame, target_usd: float, policy: TimingPolicy | None = None) -> dict[str, list[tuple[float, float, float]]]:
+    if predictions.empty:
+        return {"fixed_day_once": [], "equal_tranches": [], "model_timing_once": []}
+    predictions = predictions.copy()
     records = {"fixed_day_once": [], "equal_tranches": [], "model_timing_once": []}
+    payments = predictions.groupby([predictions["date"].dt.year, predictions["date"].dt.month]).tail(1)["date"].tolist()
     for payment in payments:
         window = predictions[(predictions["date"] <= payment) & (predictions["date"] >= payment - pd.Timedelta(days=30))]
         if len(window) < 5:
             continue
         fixed_cost = _fixed(window, target_usd)
         tranche_cost = _tranches(window, target_usd)
-        timing_cost = _model_timing_once(window, target_usd)
+        timing_cost = _model_timing_once(window, target_usd, policy)
         best_possible = float(window["USDTWD_CLOSE"].min() * target_usd)
         records["fixed_day_once"].append((fixed_cost, best_possible, fixed_cost))
         records["equal_tranches"].append((tranche_cost, best_possible, fixed_cost))
         records["model_timing_once"].append((timing_cost, best_possible, fixed_cost))
-    fixed_avg = _average_cost(records["fixed_day_once"])
+    return records
+
+
+def _comparisons_from_records(records: dict[str, list[tuple[float, float, float]]], target_usd: float) -> list[StrategyComparison]:
+    fixed_avg = _average_cost(records.get("fixed_day_once", []))
     comparisons = []
     for name, values in records.items():
         if not values:
@@ -120,12 +208,12 @@ def _tranches(window: pd.DataFrame, target_usd: float, tranches: int = 4) -> flo
     return float((selected["USDTWD_CLOSE"] * (target_usd / tranches)).sum())
 
 
-def _model_timing_once(window: pd.DataFrame, target_usd: float) -> float:
-    policy = risk_policy()["strategy_backtest"]["model_timing_once"]
-    deadline_buffer_days = int(policy["deadline_buffer_days"])
-    risk_probability = float(policy["risk_probability_up_min"])
-    opportunity_min = float(policy["opportunity_score_min"])
-    favorable_probability_max = float(policy["favorable_probability_up_max"])
+def _model_timing_once(window: pd.DataFrame, target_usd: float, policy: TimingPolicy | None = None) -> float:
+    policy = policy or _default_timing_policy()
+    deadline_buffer_days = int(policy.deadline_buffer_days)
+    risk_probability = float(policy.risk_probability_up_min)
+    opportunity_min = float(policy.opportunity_score_min)
+    favorable_probability_max = float(policy.favorable_probability_up_max)
     fallback = window.tail(max(1, deadline_buffer_days + 1)).head(1).iloc[0]
     for idx, row in window.reset_index(drop=True).iterrows():
         days_left = len(window) - idx - 1
@@ -178,3 +266,51 @@ def _expanding_opportunity_scores(predictions: pd.DataFrame) -> list[int]:
         history.append({"USDTWD_CLOSE": row["USDTWD_CLOSE"]})
         scores.append(opportunity_score(pd.DataFrame(history)))
     return scores
+
+
+def _default_timing_policy() -> TimingPolicy:
+    policy = risk_policy()["strategy_backtest"]["model_timing_once"]
+    return TimingPolicy(
+        risk_probability_up_min=float(policy["risk_probability_up_min"]),
+        opportunity_score_min=float(policy["opportunity_score_min"]),
+        favorable_probability_up_max=float(policy["favorable_probability_up_max"]),
+        deadline_buffer_days=int(policy["deadline_buffer_days"]),
+    )
+
+
+def _candidate_policies() -> list[TimingPolicy]:
+    cfg = risk_policy()["strategy_backtest"].get("tuning_grid", {})
+    risks = cfg.get("risk_probability_up_min", [0.60, 0.65, 0.70])
+    opportunities = cfg.get("opportunity_score_min", [65, 75, 85])
+    favorable = cfg.get("favorable_probability_up_max", [0.50, 0.55])
+    deadlines = cfg.get("deadline_buffer_days", [2, 3, 5])
+    return [
+        TimingPolicy(float(risk), float(opp), float(fav), int(deadline))
+        for risk, opp, fav, deadline in product(risks, opportunities, favorable, deadlines)
+    ]
+
+
+def _select_policy(train: pd.DataFrame, target_usd: float) -> tuple[TimingPolicy, float, int]:
+    best_policy = _default_timing_policy()
+    best_score = float("-inf")
+    best_payments = 0
+    for policy in _candidate_policies():
+        comparisons = _compare_from_predictions(train, target_usd, policy)
+        summary = summarize_strategy_comparison(comparisons)
+        if summary is None:
+            continue
+        payments = next((item.payments for item in comparisons if item.strategy == "model_timing_once"), 0)
+        score = _policy_score(summary)
+        if score > best_score:
+            best_policy = policy
+            best_score = score
+            best_payments = payments
+    return best_policy, best_score, best_payments
+
+
+def _policy_score(summary: StrategySummary) -> float:
+    return (
+        summary.savings_vs_fixed_day_twd
+        - max(0.0, summary.worst_rate_difference) * 10_000
+        - max(0.0, summary.volatility_difference) * 5_000
+    )

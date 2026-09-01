@@ -50,16 +50,17 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 - Feature engineering now limits market-data forward-fill freshness through `features.max_market_stale_days`, so old TAIEX/TSMC/CNH/DXY/rate values cannot silently pass as current model inputs.
 - TAIEX/TSMC historical fallback through Yahoo Finance is available for periods when TWSE official endpoints are rate-limited or unavailable; source remains explicitly labeled.
 - Strategy backtest now includes an explicit `model_timing_once` pass/fail summary so the project cannot claim savings unless the validation actually supports it.
+- Strategy threshold walk-forward tuning now tests each year with policies selected only from prior years, and is exposed through CLI, API, and dashboard.
 
 ## Latest Local Verification
 
 ```text
-pytest: 56 passed
+pytest: 63 passed
 readiness: core checks passed
 alembic current: 20260826_0001 (head)
 ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
 data-quality summary: OK after strict stale-data checks, CNY proxy ingestion, and TAIEX/TSMC Yahoo fallback backfill
-strategy backtest 2023+: local model_timing_once did not beat fixed_day_once on average cost; production backfill shows lower average cost and better worst rate but higher volatility, so it remains a risk reminder rather than a proven savings strategy
+strategy backtest 2023+: fixed policy did not beat fixed_day_once locally; walk-forward tuned policy improves average cost but still fails full pass criteria when volatility worsens
 features: 2609 rows
 predictions: 3 rows
 fx_prices: 2630 rows
