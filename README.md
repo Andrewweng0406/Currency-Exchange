@@ -359,6 +359,7 @@ Useful endpoints:
 - `GET /overview`
 - `GET /features/latest`
 - `GET /data-quality`
+- `GET /model-health`
 - `GET /ai/latest`
 - `GET /charts/usdtwd?limit=365`
 
@@ -373,6 +374,8 @@ Run model-health evaluation:
 ```bash
 python scripts/evaluate_model_health.py
 ```
+
+This compares saved predictions with actual USD/TWD outcomes after each horizon matures. The report includes sample count, accuracy, Brier score, TWD depreciation recall, MAE, and RMSE for 7D, 30D, and 90D windows. If too few real daily predictions have matured, the status stays `INSUFFICIENT_HISTORY` instead of pretending the model is already proven.
 
 Run optional OpenAI AI risk interpretation:
 

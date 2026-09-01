@@ -16,6 +16,7 @@ from app.economic_events.importer import upcoming_event_risk
 from app.exchange.planner import default_inputs, recommend_exchange
 from app.line.client import verify_line_signature
 from app.line.family_reasons import family_reasons
+from app.monitoring.model_health import latest_model_health_summary
 from app.ops.data_quality import data_coverage_report, summarize_data_quality
 from app.risk.scoring import latest_risk_snapshot
 from app.scheduler.jobs import scheduler_status, shutdown_background_scheduler, start_background_scheduler
@@ -81,6 +82,11 @@ def data_quality():
     report = data_coverage_report(_session())
     report["summary"] = _dataclass_safe(summarize_data_quality(report))
     return report
+
+
+@app.get("/model-health")
+def model_health():
+    return _dataclass_safe(latest_model_health_summary(_session()))
 
 
 @app.get("/scheduler/status")

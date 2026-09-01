@@ -52,16 +52,18 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 - Strategy backtest now includes an explicit `model_timing_once` pass/fail summary so the project cannot claim savings unless the validation actually supports it.
 - Strategy threshold walk-forward tuning now tests each year with policies selected only from prior years, and is exposed through CLI, API, and dashboard.
 - Family-facing LINE and dashboard reasons now rank plain-language market inputs such as DXY, US 2Y, foreign flow, Taiwan equities, Asia FX, and VIX instead of exposing model-internal feature names.
+- Model-health tracking now exposes 7D/30D/90D sample count, accuracy, Brier score, TWD depreciation recall, MAE, and RMSE through CLI, API, and dashboard. It reports insufficient history until enough daily predictions mature.
 
 ## Latest Local Verification
 
 ```text
-pytest: 65 passed
+pytest: 67 passed
 readiness: core checks passed
 alembic current: 20260826_0001 (head)
 ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
 data-quality summary: OK after strict stale-data checks, CNY proxy ingestion, and TAIEX/TSMC Yahoo fallback backfill
 strategy backtest 2023+: fixed policy did not beat fixed_day_once locally; walk-forward tuned policy improves average cost but still fails full pass criteria when volatility worsens
+model health: INSUFFICIENT_HISTORY because only 2 matured daily predictions are currently available locally
 features: 2609 rows
 predictions: 3 rows
 fx_prices: 2630 rows

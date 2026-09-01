@@ -15,6 +15,7 @@ from app.database.schema import BankRate, Prediction
 from app.database.session import make_session
 from app.exchange.planner import ExchangeInputs, recommend_exchange
 from app.line.family_reasons import family_reasons
+from app.monitoring.model_health import latest_model_health_summary
 from app.risk.scoring import latest_risk_snapshot
 from sqlalchemy import select
 
@@ -88,6 +89,14 @@ tab4.plotly_chart(px.bar(chart_df.tail(120), x="date", y="FOREIGN_FLOW_5D"), use
 st.subheader("主要判斷依據")
 reason_rows = [reason.__dict__ for reason in family_reasons(latest.to_dict())]
 st.dataframe(reason_rows, use_container_width=True)
+
+st.subheader("模型追蹤")
+health = latest_model_health_summary(session)
+st.caption(health.message_zh)
+if health.metrics:
+    st.dataframe([item.__dict__ for item in health.metrics], use_container_width=True)
+else:
+    st.info(health.label_zh)
 
 st.subheader("Strategy Backtest")
 bt_col1, bt_col2, bt_col3 = st.columns(3)
