@@ -47,6 +47,7 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 - Concise family-friendly LINE daily report deployed to Railway. The family report now focuses on timing and does not show exchange amounts or percentages.
 - Production scheduler support behind `SCHEDULER_ENABLED=true`, plus `scripts/run_daily_pipeline.py` for one-off daily automation.
 - Data-quality summary now feeds the LINE daily report and alert engine. Core data failures produce conservative timing guidance plus a deduped `DATA_QUALITY_WARNING`; nonblocking historical limitations show as "部分資料有限".
+- Data-quality blocking now only applies to truly core latest fields. Missing supplemental US rate/equity/VIX values are reported as limited data and should lower trust, but they no longer suppress the whole timing message.
 - Feature engineering now limits market-data forward-fill freshness through `features.max_market_stale_days`, so old TAIEX/TSMC/CNH/DXY/rate values cannot silently pass as current model inputs.
 - TAIEX/TSMC historical fallback through Yahoo Finance is available for periods when TWSE official endpoints are rate-limited or unavailable; source remains explicitly labeled.
 - Strategy backtest now includes an explicit `model_timing_once` pass/fail summary so the project cannot claim savings unless the validation actually supports it.
@@ -57,13 +58,14 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 ## Latest Local Verification
 
 ```text
-pytest: 67 passed
+pytest: 68 passed
 readiness: core checks passed
 alembic current: 20260826_0001 (head)
 ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
 data-quality summary: OK after strict stale-data checks, CNY proxy ingestion, and TAIEX/TSMC Yahoo fallback backfill
 strategy backtest 2023+: fixed policy did not beat fixed_day_once locally; walk-forward tuned policy improves average cost but still fails full pass criteria when volatility worsens
 model health: INSUFFICIENT_HISTORY because only 2 matured daily predictions are currently available locally
+production audit 2026-09-04: Railway scheduler ran, but FRED timed out for rates/equity/VIX ingestion; LINE send still succeeded and data-quality warning was correctly generated
 features: 2609 rows
 predictions: 3 rows
 fx_prices: 2630 rows

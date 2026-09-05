@@ -397,7 +397,7 @@ Audit data coverage and critical feature missingness:
 python scripts/data_quality_report.py
 ```
 
-The data-quality report includes a machine-readable `summary`. `BLOCKING` means core data is stale or missing and LINE timing advice should be treated conservatively. `LIMITED` means today's core data is usable, but some longer historical features remain incomplete.
+The data-quality report includes a machine-readable `summary`. `BLOCKING` means core data is stale or missing and LINE timing advice should be treated conservatively. `LIMITED` means today's core data is usable, but some supplemental latest values or longer historical features remain incomplete.
 
 CNH free historical data is unreliable through Yahoo Finance. The system keeps CNH as supplemental and uses FRED `DEXCHUS` USD/CNY as an onshore China FX proxy for Asia FX pressure when CNH history is unavailable. It is not labeled or treated as CNH.
 

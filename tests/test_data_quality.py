@@ -52,6 +52,17 @@ def test_data_quality_summary_allows_nonblocking_history_limits():
     assert summary.status == "LIMITED"
 
 
+def test_data_quality_summary_does_not_block_on_us_yield_latest_gap():
+    report = {
+        "coverage": [{"dataset": "fx_prices:USD/TWD", "status": "OK"}],
+        "feature_quality": [{"feature": "US2Y_CLOSE", "latest_missing": True, "status": "POOR"}],
+    }
+    summary = summarize_data_quality(report)
+    assert not summary.blocks_model_advice
+    assert summary.status == "LIMITED"
+    assert "US2Y_CLOSE 最新值缺失" in summary.issues
+
+
 def test_data_quality_summary_accepts_cny_proxy_for_cnh_history_gap():
     report = {
         "coverage": [{"dataset": "fx_prices:USD/TWD", "status": "OK"}],

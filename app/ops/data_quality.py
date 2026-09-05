@@ -89,13 +89,16 @@ def summarize_data_quality(report: dict[str, Any]) -> DataQualitySummary:
         feature = item.get("feature")
         if feature == "CNH_CLOSE" and cny_proxy_ok:
             continue
+        if item.get("latest_missing"):
+            limited_issues.append(f"{feature} 最新值缺失")
+            continue
         if item.get("status") in {"POOR", "LIMITED", "MISSING_COLUMN"} and not item.get("latest_missing"):
             limited_issues.append(f"{feature} 長期資料有限")
     if limited_issues:
         return DataQualitySummary(
             status="LIMITED",
             label_zh="部分資料有限",
-            message_zh="今天核心資料可用，但部分長期歷史資料仍有限。",
+            message_zh="今天核心資料可用，但部分輔助資料缺失或長期歷史仍有限。",
             blocks_model_advice=False,
             issues=limited_issues[:5],
         )
@@ -208,7 +211,5 @@ def _is_core_dataset(dataset: str) -> bool:
 _CORE_LATEST_FEATURES = {
     "USDTWD_CLOSE",
     "DXY_CLOSE",
-    "US2Y_CLOSE",
-    "US10Y_CLOSE",
     "DATA_COMPLETENESS",
 }
