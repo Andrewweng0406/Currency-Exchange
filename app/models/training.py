@@ -231,7 +231,7 @@ def train_horizon(session, horizon: str, min_train_years: int = 5) -> HorizonTra
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(artifact, artifact_path)
     _persist_performance(session, scores)
-    _persist_latest_prediction(session, frame, artifact)
+    _persist_latest_prediction(session, _latest_feature_frame(session), artifact)
     return HorizonTrainResult(
         horizon=horizon,
         rows=len(frame),
@@ -274,12 +274,16 @@ def _persist_performance(session, scores: list[ModelScore]) -> None:
     upsert_rows(session, ModelPerformance, rows, ("model_version", "horizon", "metric", "observed_at_utc", "source"))
 
 
+def _latest_feature_frame(session) -> pd.DataFrame:
+    return load_feature_frame(session).replace([np.inf, -np.inf], np.nan)
+
+
 def _persist_latest_prediction(session, frame: pd.DataFrame, artifact: dict[str, Any]) -> None:
     latest = frame.tail(1)
     if latest.empty:
         return
     row = latest.iloc[0]
-    x = latest[artifact["feature_columns"]]
+    x = latest.reindex(columns=artifact["feature_columns"])
     probs = {
         name: float(model.predict_proba(x)[:, 1][0])
         for name, model in artifact["classifiers"].items()
@@ -293,7 +297,14 @@ def _persist_latest_prediction(session, frame: pd.DataFrame, artifact: dict[str,
     agreement = 1 - float(np.std(list(probs.values())))
     data_completeness = float(row.get("DATA_COMPLETENESS", 0.5) or 0.5)
     confidence = max(0.0, min(1.0, 0.65 * agreement + 0.35 * data_completeness))
-    snapshot_keys = ["USDTWD_CLOSE", "DXY_RETURN_1D", "US2Y_CHANGE_1D", "US10Y_CHANGE_1D", "DATA_COMPLETENESS"]
+    snapshot_keys = [
+        "USDTWD_CLOSE",
+        "DXY_RETURN_1D",
+        "US2Y_CHANGE_1D",
+        "US10Y_CHANGE_1D",
+        "CHINA_FX_PROXY_RETURN_5D",
+        "DATA_COMPLETENESS",
+    ]
     snapshot = {key: _json_safe(row.get(key)) for key in snapshot_keys if key in row}
     snapshot["component_probabilities"] = probs
     snapshot["component_expected_returns"] = returns
