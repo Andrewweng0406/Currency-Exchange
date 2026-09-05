@@ -32,6 +32,7 @@ def explain_latest_prediction(horizon: str, feature_row: pd.Series, top_n: int =
     contributions.extend(_logistic_contributions(artifact, frame, columns))
     contributions.extend(_xgboost_contributions(artifact, columns))
     merged = _merge_contributions(contributions)
+    merged = [item for item in merged if _is_explainable_feature(item.feature)]
     return merged[:top_n]
 
 
@@ -100,3 +101,12 @@ def _merge_contributions(contributions: list[FeatureContribution]) -> list[Featu
             )
         )
     return sorted(normalized, key=lambda item: item.magnitude, reverse=True)
+
+
+def _is_explainable_feature(feature: str) -> bool:
+    upper = feature.upper()
+    if "DATA_MISSING" in upper:
+        return False
+    if upper == "DATA_COMPLETENESS":
+        return False
+    return True
