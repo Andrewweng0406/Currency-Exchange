@@ -58,6 +58,15 @@ def modeling_columns(frame: pd.DataFrame) -> list[str]:
     for col in frame.columns:
         if col in blocked or col.startswith(blocked_prefixes):
             continue
+        if _is_supplemental_china_fx_column(col):
+            continue
         if pd.api.types.is_numeric_dtype(frame[col]):
             columns.append(col)
     return columns
+
+
+def _is_supplemental_china_fx_column(column: str) -> bool:
+    upper = column.upper()
+    if upper.startswith("CHINA_FX_PROXY"):
+        return False
+    return upper.startswith(("CNH_", "CNY_"))

@@ -23,6 +23,22 @@ def test_add_forward_targets():
     assert "TARGET_RETURN_1D" not in modeling_columns(dataset.frame)
 
 
+def test_modeling_columns_uses_china_fx_proxy_not_raw_cnh_cny():
+    frame = pd.DataFrame(
+        {
+            "CNH_RETURN_5D": [0.01],
+            "CNY_RETURN_5D": [0.02],
+            "CHINA_FX_PROXY_RETURN_5D": [0.015],
+            "KRW_RETURN_5D": [0.01],
+        }
+    )
+    cols = modeling_columns(frame)
+    assert "CHINA_FX_PROXY_RETURN_5D" in cols
+    assert "KRW_RETURN_5D" in cols
+    assert "CNH_RETURN_5D" not in cols
+    assert "CNY_RETURN_5D" not in cols
+
+
 def test_yearly_expanding_splits_are_chronological():
     frame = pd.DataFrame({"date": pd.date_range("2016-01-01", "2024-12-31", freq="30D", tz="UTC")})
     splits = yearly_expanding_splits(frame, min_train_years=5)
