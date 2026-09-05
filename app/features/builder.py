@@ -72,7 +72,8 @@ def _load_market(session: Session) -> pd.DataFrame:
     if df.empty:
         return df
     df["date"] = _date_only(df["date"])
-    return df.sort_values(["symbol", "date"]).drop_duplicates(["symbol", "date"], keep="last")
+    df["priority"] = df["source"].map({"fred_csv": 0, "treasury_yield_curve_xml": 1, "twse": 1, "yahoo_finance": 2}).fillna(9)
+    return df.sort_values(["symbol", "date", "priority"]).drop_duplicates(["symbol", "date"], keep="first").drop(columns=["priority"])
 
 
 def _load_foreign_flow(session: Session) -> pd.DataFrame:

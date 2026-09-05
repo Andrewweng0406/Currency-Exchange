@@ -11,12 +11,13 @@ This project uses real providers only. If a provider fails or a series is unavai
 | BANK_USD_SELL_RATE fallback | Land Bank of Taiwan | `https://rate.landbank.com.tw/en-US/Foreign?mid=69` HTML table | Intraday during bank quotation updates | Asia/Taipei display, stored UTC | Free | None | Current page; historical page exists separately | N/A, this is the last-resort fallback | Public webpage parsing; actual transaction price still follows Hua Nan's channel quote, this is only an approximation when Hua Nan's endpoint is unreachable. |
 | DXY | Yahoo Finance | `DX-Y.NYB` | Daily | Exchange calendar, stored UTC | Free | None | Varies by Yahoo | FRED `DTWEXBGS` broad USD index | Yahoo is unofficial; ICE DXY official data may require paid licensing. |
 | Broad USD index proxy | FRED | `https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTWEXBGS` | Daily | FRED dates, stored UTC | Free | None for CSV | 2006+ for broad dollar index | Yahoo DXY | It is not classic ICE DXY; it is a broad nominal USD index proxy. |
-| US 2Y yield | FRED | `...fredgraph.csv?id=DGS2` | Daily | FRED dates, stored UTC | Free | None for CSV | 1976+ | US Treasury CSV provider later | Some holidays/missing values represented as `.`. |
-| US 10Y yield | FRED | `...fredgraph.csv?id=DGS10` | Daily | FRED dates, stored UTC | Free | None for CSV | 1962+ | US Treasury CSV provider later | Same as above. |
+| US 2Y yield | FRED | `...fredgraph.csv?id=DGS2` | Daily | FRED dates, stored UTC | Free | None for CSV | 1976+ | US Treasury Daily Treasury Par Yield Curve XML | Some holidays/missing values represented as `.`; production network timeouts can occur. |
+| US 10Y yield | FRED | `...fredgraph.csv?id=DGS10` | Daily | FRED dates, stored UTC | Free | None for CSV | 1962+ | US Treasury Daily Treasury Par Yield Curve XML | Same as above. |
+| US 2Y/10Y yield fallback | U.S. Treasury | `https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=YYYYMM` | Daily | Treasury dates, stored UTC | Free | None | Daily Treasury Par Yield Curve Rates available from 1990 | FRED | Official XML feed; currently used only as fallback for 2Y and 10Y when FRED ingestion fails. |
 | 2s10s spread | Derived | `DGS10 - DGS2` | Daily | UTC | Free | None | Depends on yield series | FRED `T10Y2Y` | Derived feature in Phase 2. |
-| VIX | FRED | `...fredgraph.csv?id=VIXCLS` | Daily close | FRED dates, stored UTC | Free | None | 1990+ | Yahoo `^VIX` later | FRED notes CBOE copyright; use citation. |
-| S&P 500 | FRED | `...fredgraph.csv?id=SP500` | Daily close | FRED dates, stored UTC | Free | None | 2012+ in FRED series | Yahoo `^GSPC` later | Close only from FRED. |
-| NASDAQ Composite | FRED | `...fredgraph.csv?id=NASDAQCOM` | Daily close | FRED dates, stored UTC | Free | None | 1971+ | Yahoo `^IXIC` later | Close only from FRED. |
+| VIX | Yahoo Finance | `^VIX` | Daily close | Exchange calendar, stored UTC | Free | None | Varies by Yahoo | FRED `VIXCLS` | Non-official fallback used because FRED batch downloads do not reliably include this series. |
+| S&P 500 | Yahoo Finance | `^GSPC` | Daily close | Exchange calendar, stored UTC | Free | None | Varies by Yahoo | FRED `SP500` | Non-official fallback used for continuity when FRED is unavailable. |
+| NASDAQ Composite | Yahoo Finance | `^IXIC` | Daily close | Exchange calendar, stored UTC | Free | None | Varies by Yahoo | FRED `NASDAQCOM` | Non-official fallback used for continuity when FRED is unavailable. |
 | USD/CNH | Yahoo Finance | `USDCNH=X` | Daily | Source timestamps normalized UTC | Free | None | Varies; current test returned latest row only | Paid FX API later | Non-official; CNH long history is unreliable through Yahoo and should be replaced before modeling. |
 | USD/CNY official proxy | FRED / Federal Reserve H.10 | `DEXCHUS` via FRED CSV | Daily | FRED dates, stored UTC | Free | None | Daily from 1981; latest observation can lag a few business days | Federal Reserve H.10 page | Onshore CNY, not offshore CNH. Used as a fallback/proxy for Asia FX pressure only when CNH history is unavailable; never labeled as CNH. |
 | USD/KRW | Yahoo Finance | `USDKRW=X` | Daily | Source timestamps normalized UTC | Free | None | Varies | Paid FX API later | Non-official; may have gaps. |
@@ -33,8 +34,8 @@ This project uses real providers only. If a provider fails or a series is unavai
 
 The first production-ready slice will ingest reliable free/public data for core daily monitoring:
 
-- Official/primary: CBC USD/TWD close, Bank of Taiwan USD spot selling, TWSE foreign flow, TAIEX, 2330, FRED yields/VIX/S&P/Nasdaq/broad USD index.
-- Non-official fallback/supplement: Yahoo Finance for USD/TWD OHLC, DXY, Asian FX pairs, and TSM ADR.
+- Official/primary: CBC USD/TWD close, Hua Nan/Land Bank USD spot selling, TWSE foreign flow, TAIEX, 2330, FRED yields/VIX/S&P/Nasdaq/broad USD index, and Treasury XML yield fallback.
+- Non-official fallback/supplement: Yahoo Finance for USD/TWD OHLC, DXY, VIX/S&P/Nasdaq fallback, Asian FX pairs, and TSM ADR.
 - Deferred: economic surprise data, Fed expectations, Taiwan macro fundamentals, and bank historical spot selling by arbitrary family bank.
 
 Deferred items are intentionally not mocked.

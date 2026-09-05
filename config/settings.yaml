@@ -33,6 +33,9 @@ providers:
     symbols:
       market_usdtwd: USDTWD=X
       dxy: DX-Y.NYB
+      vix: ^VIX
+      sp500: ^GSPC
+      nasdaq: ^IXIC
       usd_cnh: USDCNH=X
       usd_krw: USDKRW=X
       usd_jpy: USDJPY=X

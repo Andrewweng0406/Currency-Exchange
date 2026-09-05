@@ -20,6 +20,7 @@ from app.providers.cbc import TaiwanCentralBankProvider
 from app.providers.fred import FredCsvProvider
 from app.providers.hncb import HuaNanBankProvider
 from app.providers.landbank import LandBankProvider
+from app.providers.treasury import TreasuryYieldCurveProvider
 from app.providers.twse import TwseProvider
 from app.providers.yahoo import YahooFinanceProvider
 
@@ -102,6 +103,29 @@ def _ingest_bank_with_fallback(session, provider_kwargs: dict) -> int:
             ) from fallback_exc
 
 
+def _ingest_treasury_yields(session, provider: TreasuryYieldCurveProvider) -> int:
+    frame = provider.fetch_recent_yields(months=2)
+    rows = 0
+    for symbol in ["US_2Y", "US_10Y"]:
+        rows += _write_market_data(
+            session,
+            provider.source,
+            symbol,
+            frame[["date", symbol]].rename(columns={symbol: "value"}).dropna(subset=["value"]),
+        )
+    return rows
+
+
+def _ingest_fred_batch(session, provider: FredCsvProvider, series: dict[str, str]) -> tuple[int, set[str]]:
+    frames = provider.fetch_series_batch(series)
+    rows = 0
+    written = set()
+    for name, frame in frames.items():
+        rows += _write_market_data(session, provider.source, name.upper(), frame)
+        written.add(name)
+    return rows, written
+
+
 @cli.command()
 def run(database_url: str | None = typer.Option(None, help="Override DATABASE_URL/settings.yaml")) -> None:
     configure_logging()
@@ -112,15 +136,19 @@ def run(database_url: str | None = typer.Option(None, help="Override DATABASE_UR
     results: list[ProviderResult] = []
 
     fred = FredCsvProvider(**provider_kwargs)
-    for name, series_id in cfg["providers"]["fred"]["series"].items():
-        results.append(
-            _result(
-                f"fred:{name}",
-                lambda series_id=series_id, name=name: _write_market_data(
-                    session, fred.source, name.upper(), fred.fetch_series(series_id)
-                ),
-            )
-        )
+    fred_written: set[str] = set()
+
+    def ingest_fred() -> int:
+        rows, written = _ingest_fred_batch(session, fred, cfg["providers"]["fred"]["series"])
+        fred_written.update(written)
+        return rows
+
+    fred_result = _result("fred:batch", ingest_fred)
+    results.append(fred_result)
+
+    if not {"us_2y", "us_10y"}.issubset(fred_written):
+        treasury = TreasuryYieldCurveProvider(**provider_kwargs)
+        results.append(_result("treasury:yield_curve", lambda: _ingest_treasury_yields(session, treasury)))
 
     results.append(
         _result(

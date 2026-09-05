@@ -78,6 +78,8 @@ python scripts/ingest_phase1.py
 
 The command exits with code `2` if one or more providers fail, but successful providers still write data. This is deliberate: provider failure should be visible without destroying the rest of the update.
 
+If FRED times out for US 2Y or US 10Y, Phase 1 automatically falls back to the official U.S. Treasury Daily Treasury Par Yield Curve XML feed for recent 2Y/10Y observations. VIX, S&P 500, and Nasdaq also have Yahoo Finance fallback symbols configured for continuity when FRED is unavailable.
+
 Refresh one configured FRED series without running the full ingestion pipeline:
 
 ```bash

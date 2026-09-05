@@ -54,11 +54,12 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 - Strategy threshold walk-forward tuning now tests each year with policies selected only from prior years, and is exposed through CLI, API, and dashboard.
 - Family-facing LINE and dashboard reasons now rank plain-language market inputs such as DXY, US 2Y, foreign flow, Taiwan equities, Asia FX, and VIX instead of exposing model-internal feature names.
 - Model-health tracking now exposes 7D/30D/90D sample count, accuracy, Brier score, TWD depreciation recall, MAE, and RMSE through CLI, API, and dashboard. It reports insufficient history until enough daily predictions mature.
+- FRED timeout resilience improved: US 2Y/10Y now fall back to the official U.S. Treasury yield-curve XML feed, and Yahoo fallback symbols were added for VIX, S&P 500, and Nasdaq.
 
 ## Latest Local Verification
 
 ```text
-pytest: 68 passed
+pytest: 73 passed
 readiness: core checks passed
 alembic current: 20260826_0001 (head)
 ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
