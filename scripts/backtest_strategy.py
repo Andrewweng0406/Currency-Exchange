@@ -9,7 +9,7 @@ import typer
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from app.backtesting.strategy_compare import compare_exchange_strategies, summarize_strategy_comparison, walk_forward_tune_strategy
+from app.backtesting.strategy_compare import build_strategy_report, compare_exchange_strategies, walk_forward_tune_strategy
 from app.config import settings
 from app.database.session import make_session
 
@@ -28,11 +28,7 @@ def run(
         print(json.dumps(asdict(tuned), indent=2, ensure_ascii=False, allow_nan=False))
         return
     result = compare_exchange_strategies(session, target_usd=target_usd, start_year=start_year)
-    summary = summarize_strategy_comparison(result)
-    payload = {
-        "summary": asdict(summary) if summary else None,
-        "strategies": [asdict(item) for item in result],
-    }
+    payload = asdict(build_strategy_report(result, target_usd=target_usd))
     print(json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False))
 
 

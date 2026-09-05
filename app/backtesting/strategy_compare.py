@@ -37,6 +37,18 @@ class StrategySummary:
 
 
 @dataclass(frozen=True)
+class StrategyReport:
+    summary: StrategySummary | None
+    strategies: list[StrategyComparison]
+    target_usd: float
+    verdict: str
+    label_zh: str
+    should_use_for_timing: bool
+    key_findings_zh: list[str]
+    caution_zh: str
+
+
+@dataclass(frozen=True)
 class TimingPolicy:
     risk_probability_up_min: float
     opportunity_score_min: float
@@ -195,6 +207,62 @@ def summarize_strategy_comparison(comparisons: list[StrategyComparison]) -> Stra
         volatility_difference=volatility_difference,
         beat_fixed_rate=model.beat_fixed_rate,
         conclusion_zh=conclusion,
+    )
+
+
+def build_strategy_report(comparisons: list[StrategyComparison], target_usd: float = 10_000) -> StrategyReport:
+    summary = summarize_strategy_comparison(comparisons)
+    by_name = {item.strategy: item for item in comparisons}
+    fixed = by_name.get("fixed_day_once")
+    model = by_name.get("model_timing_once")
+    tranches = by_name.get("equal_tranches")
+
+    if summary is None or fixed is None or model is None:
+        return StrategyReport(
+            summary=summary,
+            strategies=comparisons,
+            target_usd=target_usd,
+            verdict="INSUFFICIENT_DATA",
+            label_zh="回測資料不足",
+            should_use_for_timing=False,
+            key_findings_zh=["目前資料不足，不能判斷模型選時是否優於固定日期。"],
+            caution_zh="請先累積更多歷史特徵與 walk-forward 預測，再評估策略表現。",
+        )
+
+    findings = [
+        f"平均換匯成本差異：以每次 USD {target_usd:,.0f} 需求估算，模型選時比固定日期 {'少' if summary.savings_vs_fixed_day_twd > 0 else '多'} NT${abs(summary.savings_vs_fixed_day_twd):,.0f}。",
+        f"最差匯率差異：模型選時 {'較好' if summary.worst_rate_difference <= 0 else '較差'} {abs(summary.worst_rate_difference):.4f}。",
+        f"成本波動差異：模型選時 {'較低' if summary.volatility_difference <= 0 else '較高'} {abs(summary.volatility_difference):.4f}。",
+        f"模型選時打敗固定日期比例：{summary.beat_fixed_rate:.0%}。",
+    ]
+    if tranches is not None:
+        findings.append(f"平均分批最大後悔成本：NT${tranches.maximum_regret:,.0f}。")
+
+    if summary.passed:
+        verdict = "PASS"
+        label = "回測通過"
+        should_use = True
+        caution = "可作為換匯時間參考，但仍只能用機率與風險管理角度使用。"
+    elif summary.savings_vs_fixed_day_twd > 0:
+        verdict = "MIXED"
+        label = "結果分歧"
+        should_use = False
+        caution = "平均成本有改善，但風險指標未同步改善，暫時只能當提醒，不能宣稱策略已勝出。"
+    else:
+        verdict = "FAIL"
+        label = "尚未通過"
+        should_use = False
+        caution = "模型選時沒有打敗固定日期，目前應視為風險提醒，不應視為省錢工具。"
+
+    return StrategyReport(
+        summary=summary,
+        strategies=comparisons,
+        target_usd=target_usd,
+        verdict=verdict,
+        label_zh=label,
+        should_use_for_timing=should_use,
+        key_findings_zh=findings,
+        caution_zh=caution,
     )
 
 

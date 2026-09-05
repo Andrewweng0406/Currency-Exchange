@@ -236,8 +236,7 @@ It currently reports:
 - Classification metrics scaffolding: accuracy, precision, recall, F1, ROC-AUC, Brier score, calibration error, and TWD depreciation recall.
 - Regression metrics scaffolding: MAE and RMSE.
 - Smoke-test comparison of fixed-date exchange vs equal-tranche exchange.
-
-The prediction-based Strategy C is intentionally not simulated yet because real model predictions and risk scores start in later phases. No synthetic prediction signals are used.
+- Strategy C comparison using real walk-forward 5D model probabilities and exchange opportunity scores. No synthetic prediction signals are used.
 
 ## 11. Phase 4 Models
 
@@ -276,7 +275,7 @@ The current model-timing strategy uses real walk-forward 5D probabilities and ex
 - Equal tranches: average rate 31.4927, worst rate 32.9907, maximum regret NT$14,868.
 - Model timing once: average rate 31.4945, worst rate 33.0453, maximum regret NT$31,617.
 
-The strategy report includes a `summary.passed` flag. The model-timing strategy should only be considered a true improvement if it lowers average TWD cost without worsening worst-rate risk or cost volatility.
+The strategy report includes `verdict`, `should_use_for_timing`, `key_findings_zh`, and `summary.passed`. The model-timing strategy should only be considered a true improvement if it lowers average TWD cost without worsening worst-rate risk or cost volatility.
 
 This means the current local model-timing strategy did not beat fixed-day exchange on average cost. On the current production dataset after TAIEX/TSMC fallback backfill, the strategy reduced average cost by about NT$161 per USD 10,000 and improved worst rate, but cost volatility increased. Until average cost, worst-rate risk, and volatility improve together, it should be presented as a risk reminder, not as proof that the system saves money.
 

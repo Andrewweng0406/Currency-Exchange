@@ -9,7 +9,7 @@ import streamlit as st
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.backtesting.dataset import load_feature_frame
-from app.backtesting.strategy_compare import compare_exchange_strategies, summarize_strategy_comparison, walk_forward_tune_strategy
+from app.backtesting.strategy_compare import build_strategy_report, compare_exchange_strategies, walk_forward_tune_strategy
 from app.config import settings
 from app.database.schema import BankRate, Prediction
 from app.database.session import make_session
@@ -113,8 +113,11 @@ if use_tuning:
     st.dataframe(years, use_container_width=True)
 else:
     comparisons = compare_exchange_strategies(session, target_usd=float(backtest_target), start_year=int(backtest_start_year))
-    summary = summarize_strategy_comparison(comparisons)
+    report = build_strategy_report(comparisons, target_usd=float(backtest_target))
+    summary = report.summary
     if summary:
-        st.metric("Model Timing", "PASS" if summary.passed else "NOT YET", f"NT$ {summary.savings_vs_fixed_day_twd:,.0f}")
-        st.caption(summary.conclusion_zh)
+        st.metric("Model Timing", report.label_zh, f"NT$ {summary.savings_vs_fixed_day_twd:,.0f}")
+        st.caption(report.caution_zh)
+        for finding in report.key_findings_zh:
+            st.write(f"- {finding}")
     st.dataframe([item.__dict__ for item in comparisons], use_container_width=True)

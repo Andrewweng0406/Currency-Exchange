@@ -7,6 +7,7 @@ from app.backtesting.strategy_compare import (
     _select_policy,
     _strategy_records,
     _tranches,
+    build_strategy_report,
     summarize_strategy_comparison,
 )
 import pandas as pd
@@ -71,6 +72,22 @@ def test_strategy_summary_requires_volatility_not_worse():
     assert summary is not None
     assert summary.passed is False
     assert "成本波動沒有同步改善" in summary.conclusion_zh
+
+
+def test_strategy_report_is_conservative_when_results_are_mixed():
+    report = build_strategy_report(
+        [
+            StrategyComparison("fixed_day_once", 12, 31.0, 32.0, 0.5, 1000, 0, 500, 0),
+            StrategyComparison("equal_tranches", 12, 31.0, 31.9, 0.4, 800, 0, 300, 0.5),
+            StrategyComparison("model_timing_once", 12, 30.9, 31.9, 0.6, 900, 1000, 400, 0.5),
+        ],
+        target_usd=5000,
+    )
+    assert report.verdict == "MIXED"
+    assert report.target_usd == 5000
+    assert not report.should_use_for_timing
+    assert "不能宣稱策略已勝出" in report.caution_zh
+    assert any("USD 5,000" in item for item in report.key_findings_zh)
 
 
 def test_strategy_records_accepts_policy_override():
