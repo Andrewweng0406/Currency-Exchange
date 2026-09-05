@@ -84,10 +84,13 @@ def summarize_data_quality(report: dict[str, Any]) -> DataQualitySummary:
         )
 
     cny_proxy_ok = any(item.get("feature") == "CNY_CLOSE" and item.get("status") == "OK" for item in quality)
+    cnh_latest_ok = any(item.get("feature") == "CNH_CLOSE" and not item.get("latest_missing") for item in quality)
     limited_issues = []
     for item in quality:
         feature = item.get("feature")
         if feature == "CNH_CLOSE" and cny_proxy_ok:
+            continue
+        if feature == "CNY_CLOSE" and cnh_latest_ok:
             continue
         if item.get("latest_missing"):
             limited_issues.append(f"{feature} 最新值缺失")

@@ -74,3 +74,16 @@ def test_data_quality_summary_accepts_cny_proxy_for_cnh_history_gap():
     summary = summarize_data_quality(report)
     assert summary.status == "OK"
     assert summary.issues == []
+
+
+def test_data_quality_summary_ignores_cny_gap_when_cnh_latest_exists():
+    report = {
+        "coverage": [{"dataset": "fx_prices:USD/TWD", "status": "OK"}],
+        "feature_quality": [
+            {"feature": "CNH_CLOSE", "latest_missing": False, "status": "OK"},
+            {"feature": "CNY_CLOSE", "latest_missing": True, "status": "POOR"},
+        ],
+    }
+    summary = summarize_data_quality(report)
+    assert summary.status == "OK"
+    assert summary.issues == []

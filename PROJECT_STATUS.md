@@ -59,7 +59,7 @@ Latest committed baseline before this audit: `e5e51f7 Update verified project st
 ## Latest Local Verification
 
 ```text
-pytest: 73 passed
+pytest: 74 passed
 readiness: core checks passed
 alembic current: 20260826_0001 (head)
 ingest_phase1.py: 17 providers succeeded, 0 failed, 72,574 rows written/updated
