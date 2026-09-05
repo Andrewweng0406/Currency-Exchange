@@ -97,3 +97,42 @@ def test_market_features_prefer_fred_over_yahoo_same_day():
         features = build_feature_frame(session)
 
     assert features.iloc[0]["DXY_CLOSE"] == 101
+
+
+def test_build_feature_frame_adds_china_fx_proxy_from_cny_history():
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        for day in range(1, 8):
+            observed = datetime(2026, 1, day, tzinfo=timezone.utc)
+            session.add(
+                FxPrice(
+                    observed_at_utc=observed,
+                    source="test",
+                    pair="USD/TWD",
+                    open=31,
+                    high=31,
+                    low=31,
+                    close=31 + day / 100,
+                    volume=None,
+                )
+            )
+            session.add(
+                MarketData(
+                    observed_at_utc=observed,
+                    source="fred_csv",
+                    symbol="USD_CNY",
+                    open=None,
+                    high=None,
+                    low=None,
+                    close=7 + day / 100,
+                    volume=None,
+                )
+            )
+        session.commit()
+        features = build_feature_frame(session)
+
+    latest = features.iloc[-1]
+    assert latest["CHINA_FX_PROXY_CLOSE"] == latest["CNY_CLOSE"]
+    assert latest["CHINA_FX_PROXY_DATA_MISSING"] == 0
+    assert "CHINA_FX_PROXY_RETURN_5D" in features.columns

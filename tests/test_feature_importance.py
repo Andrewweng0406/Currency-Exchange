@@ -7,3 +7,4 @@ def test_feature_category_labels_key_fx_drivers():
     assert feature_category("TAIEX_RETURN_5D") == "台股與台積電"
     assert feature_category("FOREIGN_FLOW_5D") == "台灣外資資金流"
     assert feature_category("CNY_RETURN_5D") == "亞洲貨幣"
+    assert feature_category("CHINA_FX_PROXY_RETURN_5D") == "亞洲貨幣"

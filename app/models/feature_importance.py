@@ -83,7 +83,7 @@ def feature_category(feature: str) -> str:
         return "美元強弱"
     if upper.startswith(("US2Y", "US10Y", "US_2S10S")):
         return "美國利率"
-    if upper.startswith(("CNH", "CNY", "KRW", "JPY")):
+    if upper.startswith(("CHINA_FX", "CNH", "CNY", "KRW", "JPY")):
         return "亞洲貨幣"
     if upper.startswith(("VIX", "SP500", "NASDAQ")):
         return "全球風險情緒"

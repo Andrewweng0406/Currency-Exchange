@@ -174,6 +174,15 @@ def build_feature_frame(session: Session) -> pd.DataFrame:
                     derived[f"{prefix}_RETURN_{window}D"] = pct_return(series, window)
             derived[f"{prefix}_VOLATILITY_20D"] = rolling_volatility(series, 20)
             derived[f"{prefix}_DATA_MISSING"] = missing
+        china_proxy = _china_fx_proxy(derived)
+        if china_proxy is not None:
+            derived["CHINA_FX_PROXY_CLOSE"] = china_proxy
+            for window in [1, 5, 20]:
+                derived[f"CHINA_FX_PROXY_RETURN_{window}D"] = pct_return(china_proxy, window)
+            derived["CHINA_FX_PROXY_VOLATILITY_20D"] = rolling_volatility(china_proxy, 20)
+            derived["CHINA_FX_PROXY_DATA_MISSING"] = china_proxy.isna().astype(int)
+        else:
+            derived["CHINA_FX_PROXY_DATA_MISSING"] = 1
         if {"US_2Y", "US_10Y"}.issubset(close_pivot.columns):
             us2y, _ = _market_series_with_missing_flag(close_pivot["US_2Y"], frame.index, max_market_stale_days)
             us10y, _ = _market_series_with_missing_flag(close_pivot["US_10Y"], frame.index, max_market_stale_days)
@@ -197,6 +206,18 @@ def build_feature_frame(session: Session) -> pd.DataFrame:
     frame = pd.concat([frame, pd.DataFrame(derived, index=frame.index)], axis=1)
     frame["DATA_COMPLETENESS"] = 1 - frame.filter(like="_DATA_MISSING").mean(axis=1).fillna(0)
     return frame.reset_index(names="date")
+
+
+def _china_fx_proxy(derived: dict[str, Any]) -> pd.Series | None:
+    cny = derived.get("CNY_CLOSE")
+    cnh = derived.get("CNH_CLOSE")
+    if cny is not None and cnh is not None:
+        return cny.combine_first(cnh)
+    if cny is not None:
+        return cny
+    if cnh is not None:
+        return cnh
+    return None
 
 
 def persist_features(session: Session, feature_set: str = "daily_v1") -> FeatureBuildResult:

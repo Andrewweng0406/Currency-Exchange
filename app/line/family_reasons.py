@@ -115,10 +115,12 @@ def _taiwan_equity_reason(row: dict[str, Any]) -> FamilyReason | None:
 
 
 def _asia_fx_reason(row: dict[str, Any]) -> FamilyReason | None:
-    cnh = _num(row.get("CNH_RETURN_5D"))
-    if cnh is None:
-        cnh = _num(row.get("CNY_RETURN_5D"))
-    values = [value for value in [cnh, _num(row.get("KRW_RETURN_5D")), _num(row.get("JPY_RETURN_5D"))] if value is not None]
+    china_fx = _num(row.get("CHINA_FX_PROXY_RETURN_5D"))
+    if china_fx is None:
+        china_fx = _num(row.get("CNH_RETURN_5D"))
+    if china_fx is None:
+        china_fx = _num(row.get("CNY_RETURN_5D"))
+    values = [value for value in [china_fx, _num(row.get("KRW_RETURN_5D")), _num(row.get("JPY_RETURN_5D"))] if value is not None]
     if not values:
         return None
     average = sum(values) / len(values)

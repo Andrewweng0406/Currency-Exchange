@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database.schema import Base, ExchangePlan
 from app.exchange.planner import ExchangeInputs, payment_deadline_risk, persist_exchange_plan, recommend_exchange
 from app.risk.cbc import estimate_cbc_intervention_risk
-from app.risk.scoring import detect_regime, opportunity_score
+from app.risk.scoring import _asia_pressure, detect_regime, opportunity_score
 from app.risk.tail import estimate_tail_risk
 
 
@@ -31,6 +31,18 @@ def test_detect_regime():
     regimes = detect_regime(pd.Series({"DXY_RETURN_20D": 0.02, "USDTWD_VOLATILITY_20D": 0.005, "VIX_CHANGE_5D": 5}))
     assert "USD_STRONG" in regimes
     assert "HIGH_VOL" in regimes
+
+
+def test_asia_pressure_prefers_china_fx_proxy():
+    row = pd.Series(
+        {
+            "CHINA_FX_PROXY_RETURN_5D": 0.02,
+            "CNH_RETURN_5D": -0.02,
+            "KRW_RETURN_5D": 0.02,
+            "JPY_RETURN_5D": 0.02,
+        }
+    )
+    assert _asia_pressure(row) == 100
 
 
 def test_tail_risk_estimate():

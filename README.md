@@ -133,7 +133,7 @@ The feature set is stored in the `features` table as `daily_v1`. It includes:
 - DXY/broad USD index returns.
 - US 2Y/10Y changes and 2s10s spread.
 - VIX, S&P 500, Nasdaq, USD/CNH, USD/KRW, USD/JPY returns and volatility.
-- FRED USD/CNY (`DEXCHUS`) as an explicitly labeled onshore China FX proxy when CNH history is unavailable.
+- `CHINA_FX_PROXY_*`, an explicitly labeled China FX proxy that uses FRED USD/CNY (`DEXCHUS`) history first and only falls back to CNH when CNY is unavailable.
 - TAIEX, 2330, TSM ADR returns and TSMC volume z-score.
 - Foreign-flow 1D/3D/5D/20D sums and z-score.
 - `DATA_COMPLETENESS` and per-source missing-data flags for confidence logic.
@@ -401,7 +401,7 @@ python scripts/data_quality_report.py
 
 The data-quality report includes a machine-readable `summary`. `BLOCKING` means core data is stale or missing and LINE timing advice should be treated conservatively. `LIMITED` means today's core data is usable, but some supplemental latest values or longer historical features remain incomplete.
 
-CNH free historical data is unreliable through Yahoo Finance. The system keeps CNH as supplemental and uses FRED `DEXCHUS` USD/CNY as an onshore China FX proxy for Asia FX pressure when CNH history is unavailable. It is not labeled or treated as CNH.
+CNH free historical data is unreliable through Yahoo Finance. The system keeps CNH as supplemental and uses `CHINA_FX_PROXY_*` for Asia FX pressure. That proxy uses FRED `DEXCHUS` USD/CNY history first and only falls back to CNH if CNY is unavailable. It is not labeled or treated as CNH.
 
 Market features use `features.max_market_stale_days` from `config/settings.yaml` to prevent stale forward-filled values from being treated as valid observations. The default is 7 calendar days, which tolerates weekends and holidays but flags longer source outages or historical gaps as missing data. This may make data-quality reports look stricter, but it avoids training models on silently stale TAIEX, TSMC, DXY, rates, or Asia FX values.
 

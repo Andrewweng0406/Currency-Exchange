@@ -136,7 +136,9 @@ def _scaled_centered(value: Any, scale: float) -> float:
 
 
 def _asia_pressure(row: pd.Series) -> float:
-    china_fx = row.get("CNH_RETURN_5D")
+    china_fx = row.get("CHINA_FX_PROXY_RETURN_5D")
+    if china_fx is None or pd.isna(china_fx):
+        china_fx = row.get("CNH_RETURN_5D")
     if china_fx is None or pd.isna(china_fx):
         china_fx = row.get("CNY_RETURN_5D")
     values = [china_fx, row.get("KRW_RETURN_5D"), row.get("JPY_RETURN_5D")]

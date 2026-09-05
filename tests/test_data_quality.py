@@ -45,7 +45,7 @@ def test_data_quality_summary_blocks_core_latest_missing():
 def test_data_quality_summary_allows_nonblocking_history_limits():
     report = {
         "coverage": [{"dataset": "fx_prices:USD/TWD", "status": "OK"}],
-        "feature_quality": [{"feature": "CNH_CLOSE", "latest_missing": False, "status": "POOR"}],
+        "feature_quality": [{"feature": "CHINA_FX_PROXY_CLOSE", "latest_missing": False, "status": "POOR"}],
     }
     summary = summarize_data_quality(report)
     assert not summary.blocks_model_advice
@@ -63,12 +63,11 @@ def test_data_quality_summary_does_not_block_on_us_yield_latest_gap():
     assert "US2Y_CLOSE 最新值缺失" in summary.issues
 
 
-def test_data_quality_summary_accepts_cny_proxy_for_cnh_history_gap():
+def test_data_quality_summary_accepts_china_fx_proxy():
     report = {
         "coverage": [{"dataset": "fx_prices:USD/TWD", "status": "OK"}],
         "feature_quality": [
-            {"feature": "CNH_CLOSE", "latest_missing": False, "status": "POOR"},
-            {"feature": "CNY_CLOSE", "latest_missing": False, "status": "OK"},
+            {"feature": "CHINA_FX_PROXY_CLOSE", "latest_missing": False, "status": "OK"},
         ],
     }
     summary = summarize_data_quality(report)
@@ -76,14 +75,13 @@ def test_data_quality_summary_accepts_cny_proxy_for_cnh_history_gap():
     assert summary.issues == []
 
 
-def test_data_quality_summary_ignores_cny_gap_when_cnh_latest_exists():
+def test_data_quality_summary_reports_china_fx_proxy_gap():
     report = {
         "coverage": [{"dataset": "fx_prices:USD/TWD", "status": "OK"}],
         "feature_quality": [
-            {"feature": "CNH_CLOSE", "latest_missing": False, "status": "OK"},
-            {"feature": "CNY_CLOSE", "latest_missing": True, "status": "POOR"},
+            {"feature": "CHINA_FX_PROXY_CLOSE", "latest_missing": True, "status": "POOR"},
         ],
     }
     summary = summarize_data_quality(report)
-    assert summary.status == "OK"
-    assert summary.issues == []
+    assert summary.status == "LIMITED"
+    assert "CHINA_FX_PROXY_CLOSE 最新值缺失" in summary.issues

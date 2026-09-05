@@ -17,7 +17,12 @@ def estimate_cbc_intervention_risk(row: pd.Series) -> CbcInterventionRisk:
     reasons: list[str] = []
     usdtwd_5d = float(row.get("USDTWD_RETURN_5D") or 0)
     usdtwd_vol = float(row.get("USDTWD_VOLATILITY_20D") or 0)
-    asia_returns = [row.get("CNH_RETURN_5D"), row.get("KRW_RETURN_5D"), row.get("JPY_RETURN_5D")]
+    china_fx = row.get("CHINA_FX_PROXY_RETURN_5D")
+    if china_fx is None or pd.isna(china_fx):
+        china_fx = row.get("CNH_RETURN_5D")
+    if china_fx is None or pd.isna(china_fx):
+        china_fx = row.get("CNY_RETURN_5D")
+    asia_returns = [china_fx, row.get("KRW_RETURN_5D"), row.get("JPY_RETURN_5D")]
     asia_clean = [float(v) for v in asia_returns if v is not None and not pd.isna(v)]
     asia_avg = sum(asia_clean) / len(asia_clean) if asia_clean else 0
     divergence = abs(usdtwd_5d - asia_avg)
