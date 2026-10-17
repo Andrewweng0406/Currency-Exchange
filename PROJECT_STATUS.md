@@ -1,5 +1,7 @@
 # Project Status
 
+Latest operational addition, 2026-10-17: [persistent pipeline execution evidence](docs/PIPELINE_OPERATIONS_2026-10-17.md). New read-only `/pipeline/status` exposes progress, last success, failures, interruption, and stale execution. A shared lock also covers surviving child steps. 165 tests pass locally and in the deployed Linux runtime. The real manual five-step run completed at 08:07:01 UTC with all return codes zero and no LINE step; six existing prospective records remain unchanged. The first future scheduled run still awaits 22:30 UTC.
+
 Production rollout, 2026-10-17 UTC: [durable validation operations](docs/PRODUCTION_VALIDATION_2026-10-17.md). Latest deployment `21cac22a-1df1-4f34-9f87-e439efdad163` reached SUCCESS; 155 tests pass both locally and in the deployed Linux/CPU runtime. All 21 ingestion items succeed after correcting FRED headers, split ZIP members, and TWSE non-trading dates. PostgreSQL additive migrations applied, model evidence uses a persistent volume, and one sequential daily pipeline is scheduled at 22:30 UTC. LINE_REPORT_ENABLED=false. A real redeploy preserved all initial snapshots and archived files.
 
 [Production prediction timestamp audit](docs/PRODUCTION_PREDICTION_AUDIT_2026-10-17.md): of 138 v1 rows, 60 fail basic official-calendar/creation-time checks; the other 78 pass only a necessary timestamp check. None has explicit issuance evidence. Legacy rows are retained and do not certify model skill. Older entries below describe earlier local-only stages.

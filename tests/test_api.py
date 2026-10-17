@@ -106,3 +106,12 @@ def test_forward_validation_endpoint_starts_empty():
     payload = TestClient(app).get("/forward-validation").json()
     assert payload["status"] == "NOT_STARTED"
     assert payload["automatic_promotion"] is False
+
+
+def test_pipeline_status_is_read_only_and_does_not_claim_first_run(monkeypatch, tmp_path):
+    path = tmp_path / "operations"
+    monkeypatch.setattr("app.scheduler.state.STATE_DIR", path)
+    response = TestClient(app).get("/pipeline/status")
+    assert response.status_code == 200
+    assert response.json()["status"] == "NO_RECORD"
+    assert not path.exists()

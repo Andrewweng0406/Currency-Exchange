@@ -224,7 +224,10 @@ Check production scheduler state:
 
 ```text
 GET /scheduler/status
+GET /pipeline/status
 ```
+
+`/pipeline/status` reads persistent execution records: the latest run, its trigger (`manual` or `scheduled`), current step, results, and last complete success. `FAILED`, `INTERRUPTED`, `STALE`, and `STATE_ERROR` require investigation; `NO_RECORD` means no record under this instrumentation, not proof that the older pipeline never ran. Runs use a shared process lock on the evidence volume, so overlapping manual and scheduled executions cannot run two pipelines. Records are stored under `models/artifacts/operations/` and survive deployments. This operational status does not certify forecasting skill.
 
 For one-off production-style execution, run:
 

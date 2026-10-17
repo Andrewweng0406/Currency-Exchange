@@ -23,6 +23,7 @@ from app.risk.scoring import latest_risk_snapshot
 from app.ops.advice import guard_model_advice
 from app.ops.bank_quotes import latest_bank_quote
 from app.ops.data_quality import data_coverage_report, summarize_data_quality
+from app.scheduler.state import pipeline_status
 from sqlalchemy import select
 
 st.set_page_config(page_title="TWD FX Monitor", layout="wide")
@@ -122,6 +123,17 @@ with make_session(settings()["database"]["url"]) as session:
         st.info(health.label_zh)
 
     st.subheader("事前預測追蹤")
+    execution = pipeline_status()
+    execution_labels = {"NO_RECORD": "尚無流程執行紀錄", "RUNNING": "資料更新中", "SUCCEEDED": "最近一次更新完成",
+                        "FAILED": "最近一次更新失敗", "INTERRUPTED": "上次更新已中斷",
+                        "STALE": "更新已逾期", "STATE_ERROR": "無法讀取更新紀錄"}
+    execution_label = execution_labels.get(execution["status"], execution["status"])
+    if execution["status"] in {"FAILED", "INTERRUPTED", "STALE", "STATE_ERROR"}:
+        st.warning(execution_label)
+    else:
+        st.caption(execution_label)
+    if execution.get("last_success"):
+        st.caption(f"上次完整更新：{execution['last_success']['finished_at_utc']}。執行成功不代表預測已驗證有效。")
     forward = forward_validation_summary(session)
     st.caption(forward["scope"])
     if not forward["cohorts"]:

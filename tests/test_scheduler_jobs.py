@@ -1,4 +1,10 @@
 from app.scheduler.jobs import DAILY_PIPELINE, PipelineStep, run_daily_pipeline, scheduler_status
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolated_execution_records(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.scheduler.state.STATE_DIR", tmp_path / "operations")
 
 
 def test_daily_pipeline_runs_steps_in_order(monkeypatch):

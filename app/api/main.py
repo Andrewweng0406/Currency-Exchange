@@ -25,6 +25,7 @@ from app.ops.bank_quotes import latest_bank_quote
 from app.ops.data_quality import data_coverage_report, summarize_data_quality
 from app.risk.scoring import latest_risk_snapshot
 from app.scheduler.jobs import scheduler_status, shutdown_background_scheduler, start_background_scheduler
+from app.scheduler.state import pipeline_status
 
 
 @asynccontextmanager
@@ -110,6 +111,11 @@ def model_health(session=Depends(_session)):
 @app.get("/scheduler/status")
 def scheduler_status_endpoint():
     return scheduler_status()
+
+
+@app.get("/pipeline/status")
+def pipeline_status_endpoint():
+    return pipeline_status()
 
 
 @app.get("/forward-validation")
