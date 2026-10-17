@@ -22,6 +22,31 @@ from scripts.analyze_history import (evaluate_models, model_summary, market_summ
                                     monthly_comparison, calibration_bins, clean, markdown_table)
 
 
+def strategy_cost_sensitivity(strategies):
+    """Stress incremental costs versus the same USD budget bought once at month start.
+
+    These are assumed adverse execution premiums, not historical bank quotes.
+    A premium common to both policies cancels; only their difference belongs here.
+    """
+    rows = []
+    for item in strategies.itertuples(index=False):
+        extra_orders = 3 if item.strategy == 'tranche' else 0
+        premiums = (0.,) if item.strategy == 'fixed' else (0., .01, .03, .05, .10)
+        for premium in premiums:
+            for fee in (0., 50., 100., 200.):
+                extra_cost = item.target_usd * premium + extra_orders * fee
+                rows.append(dict(
+                    strategy=item.strategy, target_usd=item.target_usd,
+                    assumed_extra_premium_twd_per_usd=premium, fee_twd_per_order=fee,
+                    extra_orders=extra_orders, extra_cost_twd=extra_cost,
+                    mean_savings_after_cost_twd=item.mean_savings_twd-extra_cost,
+                    savings_ci_low=item.savings_ci_low-extra_cost,
+                    savings_ci_high=item.savings_ci_high-extra_cost,
+                    positive_lower_bound=item.savings_ci_low-extra_cost > 0,
+                ))
+    return pd.DataFrame(rows)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--start-date', default='2016-08-17')
@@ -34,6 +59,8 @@ def main():
     with engine.connect() as connection:
         if engine.dialect.name == 'sqlite':
             connection.exec_driver_sql('PRAGMA query_only=ON')
+        elif engine.dialect.name == 'postgresql':
+            connection.exec_driver_sql('SET TRANSACTION READ ONLY')
         with Session(bind=connection) as session:
             f = load_feature_frame(session, 'daily_v3')
             f = f[(f.date >= pd.Timestamp(args.start_date, tz='UTC')) &
@@ -78,7 +105,8 @@ def main():
                                     mean_savings_after_extra_fees=row.mean_savings_twd-extra_orders*fee))
     tables=dict(predictions=predictions,folds=folds,model_metrics=metrics,yearly_metrics=years,
                 annual_returns=annual,tail_distribution=tails,monthly_strategy=monthly,
-                strategy_summary=strategies,calibration_bins=calibration,fee_sensitivity=pd.DataFrame(sensitivity))
+                strategy_summary=strategies,calibration_bins=calibration,fee_sensitivity=pd.DataFrame(sensitivity),
+                cost_sensitivity=strategy_cost_sensitivity(strategies))
     for name, table in tables.items():table.to_csv(out/f'{name}.csv',index=False)
     # Recent holdout is already explored historical data, not a pristine final test.
     recent=[]

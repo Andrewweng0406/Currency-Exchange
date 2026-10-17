@@ -2,6 +2,8 @@
 
 Production-oriented USD/TWD probability forecasting and exchange risk management for a student in the US whose family converts TWD to USD. The project is built around probability, confidence, risk control, auditability, and LINE Messaging API alerts. It does not claim exact future FX prices.
 
+The [2026-10-17 production quantitative review](docs/PRODUCTION_QUANT_REVIEW_2026-10-17.md) reruns research against the real PostgreSQL data. Historical 5D/20D ensembles fail the fixed-50% probability benchmark, and the monthly timing result remains uncertain after explicit incremental-cost stress. Model timing stays disabled. Reports are under `data/analysis/production_quant_20261017/`; the research script now includes `cost_sensitivity.csv` and explicitly enforces read-only PostgreSQL transactions.
+
 ## Prospective Validation
 
 [The prospective validation ledger](docs/FORWARD_VALIDATION_2026-10-16.md) captures complete input/model/quote evidence and freezes first observed outcomes in separate tables. View `GET /forward-validation` or run `python scripts/run_forward_validation.py --status-only`. [Production rollout](docs/PRODUCTION_VALIDATION_2026-10-17.md) now runs the sequential pipeline daily at 22:30 UTC, with PostgreSQL and persistent model/evidence storage. LINE notifications require explicit enablement; prospective collection does not automatically activate model timing.

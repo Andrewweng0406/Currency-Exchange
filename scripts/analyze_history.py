@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import MetaData, Table, func, inspect, select
 from sqlalchemy.orm import Session
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -59,13 +59,21 @@ def block_interval(values, block_size=20, repeats=1000):
 
 def inventory(session):
     tables = []
+    metadata = MetaData()
     for table in inspect(session.bind).get_table_names():
         if table == 'alembic_version':
             continue
-        n, start, end = session.execute(text(
-            f'SELECT count(*),min(observed_at_utc),max(observed_at_utc) FROM "{table}"'
-        )).one()
-        tables.append(dict(table=table, rows=n, start=start, end=end))
+        reflected = Table(table, metadata, autoload_with=session.connection())
+        time_column = next((name for name in ('observed_at_utc', 'origin_utc', 'target_utc')
+                            if name in reflected.c), None)
+        statement = select(func.count()).select_from(reflected)
+        if time_column:
+            column = reflected.c[time_column]
+            statement = statement.add_columns(func.min(column), func.max(column))
+        row = session.execute(statement).one()
+        tables.append(dict(table=table, rows=row[0], time_column=time_column,
+                           start=row[1] if time_column else None,
+                           end=row[2] if time_column else None))
     sources = []
     for model, dimensions in [
         (FxPrice, ['pair', 'source']), (MarketData, ['symbol', 'source']),
@@ -365,9 +373,9 @@ def write_report(out, features, tables, coverage, yearly, tails, metrics, yearly
 
 ## 資料是否保留
 
-有。本報告從目前設定的本機 database 唯讀取數據，未寫入 database、改動正式模型、部署或發送通知。特徵採用 {feature_set}，共 {len(features):,} 個日期，{features['date'].min().date()} 至 {features['date'].max().date()}。v1 特徵與預測也保留，見下表。
+有。本報告從目前設定的 database 唯讀取數據，未寫入 database、改動正式模型、部署或發送通知。特徵採用 {feature_set}，共 {len(features):,} 個日期，{features['date'].min().date()} 至 {features['date'].max().date()}。v1 特徵與預測也保留，見下表。
 
-{markdown_table(pd.DataFrame(tables), ['table', 'rows', 'start', 'end'])}
+{markdown_table(pd.DataFrame(tables), ['table', 'rows', 'time_column', 'start', 'end'])}
 
 market_data 的 1962 年起始日主要是美債利率，不能解讀為有六十年的 USD/TWD 歷史。銀行報價與線上歷史預測非常少，長期市場資料與真實線上預測證據不可混為一談。資料表按來源與日期更新同一筆資料，不是每次下載都有完整版本保存；本機另有前次稽核備份，但不等於完整 vintage 資料庫。
 
@@ -429,7 +437,7 @@ nonoverlap_spearman 另外每隔五個有效配對抽樣一次，僅供敏感度
 
 1. 以純 50%／歷史漲幅比例為最低門檻，檢查現有動能基準本身是否製造誤差。逐年比較比單一整體 AUC 更重要。
 2. 研究價格水準對跨年模型的不穩定性；可用特徵和試驗規則先固定，未來再累積真正未見資料驗證，避免反覆挑選同一段歷史最好的模型。
-3. 先補齊歷史與持續蒐集實際使用銀行的美元即期賣出價、完整交易日曆／資料品質，才有基礎驗證可成交成本。本機 {bank_rows} 筆銀行報價不足以支持長期換匯績效。
+3. 先補齊歷史與持續蒐集實際使用銀行的美元即期賣出價、完整交易日曆／資料品質，才有基礎驗證可成交成本。資料庫 {bank_rows} 筆銀行報價不足以支持長期換匯績效。
 4. FRED H.10 已按隔週發布與美國假日對齊，其他跨市場來源仍有延後日期代理，未具完整發布時間／歷史版本；故即使已排除訓練標籤交界，仍不能宣稱徹底消除所有前視偏誤。歷史特徵未完整對齊的來源尤其需保守解讀。
 5. 本分析不自動提高正式模型權重、解除模型建議守門條件或部署策略。
 
@@ -466,6 +474,8 @@ def main():
     with engine.connect() as connection:
         if engine.dialect.name == 'sqlite':
             connection.exec_driver_sql('PRAGMA query_only = ON')
+        elif engine.dialect.name == 'postgresql':
+            connection.exec_driver_sql('SET TRANSACTION READ ONLY')
         with Session(bind=connection) as session:
             tables, coverage = inventory(session)
             features = load_feature_frame(session, feature_set=args.feature_set)
@@ -473,7 +483,7 @@ def main():
             features = features[features.date < cutoff].reset_index(drop=True)
             features.attrs["feature_set"] = args.feature_set
             if features.empty:
-                raise ValueError('No v2 features before cutoff')
+                raise ValueError(f'No {args.feature_set} features before cutoff')
             print(f'Read {len(features)} feature rows; database is read-only', flush=True)
             predictions, folds = evaluate_models(features)
     predictions.to_csv(out / 'oof_predictions.csv', index=False)
