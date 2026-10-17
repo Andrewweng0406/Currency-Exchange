@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import math
 
 import pandas as pd
 
@@ -15,18 +16,27 @@ _CASH_SELL_KEYS = ("CASH_SELL_AMT_BOARD", "CASH_SELL")
 def _first_present(row: dict, keys: tuple[str, ...]) -> float | None:
     for key in keys:
         if key in row:
-            return pd.to_numeric(row[key], errors="coerce")
+            value = pd.to_numeric(row[key], errors="coerce")
+            if pd.notna(value) and math.isfinite(value) and value > 0:
+                return float(value)
     return None
 
 
 def find_usd_spot_row(rows: list[dict]) -> dict:
+    if not isinstance(rows, list):
+        raise ProviderError("Hua Nan Bank response must be a list")
     for row in rows:
-        if row.get("TYPE") != "spot":
+        if not isinstance(row, dict):
+            continue
+        kind = str(row.get("TYPE") or "").strip().lower()
+        if kind not in {"spot", ""}:
             continue
         desc = f"{row.get('DESC_ENG', '')} {row.get('DESC_CHI', '')}".upper()
         if "USD" not in desc and "美金" not in desc:
             continue
         if "DAY" in desc or "天" in desc:
+            continue
+        if kind == "" and str(row.get("DESC_ENG", "")).strip().upper() != "USD":
             continue
         return row
     raise ProviderError("USD spot row not found in Hua Nan Bank rates")
@@ -56,6 +66,16 @@ class HuaNanBankProvider(HttpProvider):
         except ValueError as exc:
             raise ProviderError("Hua Nan Bank response was not valid JSON") from exc
         row = find_usd_spot_row(rows)
+        buying = _first_present(row, _SPOT_BUY_KEYS)
+        selling = _first_present(row, _SPOT_SELL_KEYS)
+        if buying is None or selling is None or selling < buying:
+            raise ProviderError("Hua Nan USD spot quote is invalid or crossed")
+        try:
+            observed = pd.Timestamp(f"{row['DATE']} {row['TIME']}").tz_localize("Asia/Taipei").tz_convert("UTC")
+            if pd.isna(observed):
+                raise ValueError("Missing quote timestamp")
+        except (KeyError, ValueError, TypeError) as exc:
+            raise ProviderError("Hua Nan quote timestamp missing or invalid") from exc
         return pd.DataFrame(
             [
                 {
@@ -63,9 +83,9 @@ class HuaNanBankProvider(HttpProvider):
                     "currency": "USD",
                     "cash_buying": _first_present(row, _CASH_BUY_KEYS),
                     "cash_selling": _first_present(row, _CASH_SELL_KEYS),
-                    "spot_buying": _first_present(row, _SPOT_BUY_KEYS),
-                    "spot_selling": _first_present(row, _SPOT_SELL_KEYS),
-                    "observed_at_utc": pd.Timestamp.utcnow(),
+                    "spot_buying": buying,
+                    "spot_selling": selling,
+                    "observed_at_utc": observed,
                 }
             ]
         )

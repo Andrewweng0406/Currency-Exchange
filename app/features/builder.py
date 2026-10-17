@@ -7,13 +7,14 @@ from math import isfinite
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.schema import Feature, ForeignFlow, FxPrice, MarketData
 from app.database.upsert import upsert_rows
 from app.features.indicators import atr, bollinger_position, pct_return, rolling_volatility, rsi, zscore
+from app.features.availability import h10_available_dates
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,7 @@ def _json_record(row: pd.Series) -> str:
     return json.dumps({k: _clean_value(v) for k, v in row.items()}, sort_keys=True)
 
 
-def _load_fx(session: Session) -> pd.DataFrame:
+def _load_fx(session: Session, source_policy: str = "prefer_official") -> pd.DataFrame:
     rows = session.execute(
         select(FxPrice.observed_at_utc, FxPrice.source, FxPrice.open, FxPrice.high, FxPrice.low, FxPrice.close, FxPrice.volume)
         .where(FxPrice.pair == "USD/TWD")
@@ -50,8 +51,15 @@ def _load_fx(session: Session) -> pd.DataFrame:
     df = pd.DataFrame(rows, columns=["date", "source", "open", "high", "low", "close", "volume"])
     if df.empty:
         return df
+    if source_policy not in {"official_only", "prefer_official"}:
+        raise ValueError(f"Unknown FX source policy: {source_policy}")
+    if source_policy == "official_only":
+        df = df[df["source"] == "cbc_taiwan"].copy()
     df["date"] = _date_only(df["date"])
-    df["priority"] = df["source"].map({"yahoo_finance": 0, "cbc_taiwan": 1}).fillna(9)
+    today = pd.Timestamp.now(tz="UTC").normalize()
+    # Yahoo's current FX daily bar is still forming; never use future-dated bars.
+    df = df[(df["date"] <= today) & ~((df["source"] == "yahoo_finance") & (df["date"] >= today))].copy()
+    df["priority"] = df["source"].map({"cbc_taiwan": 0, "yahoo_finance": 1}).fillna(9)
     return df.sort_values(["date", "priority"]).drop_duplicates("date", keep="first").drop(columns=["priority"])
 
 
@@ -72,8 +80,21 @@ def _load_market(session: Session) -> pd.DataFrame:
     if df.empty:
         return df
     df["date"] = _date_only(df["date"])
+    # Daily feeds supply observation dates, not verified publication timestamps.
+    # Apply a conservative availability proxy before any forward fill or joins.
+    df["observation_date"] = df["date"]
+    lag = df["source"].map({"fred_csv": 2, "treasury_yield_curve_xml": 1, "yahoo_finance": 1}).fillna(0)
+    df["date"] = df["date"] + pd.to_timedelta(lag, unit="D")
+    h10 = (df["source"] == "fred_csv") & df["symbol"].isin(["BROAD_USD_INDEX", "USD_CNY"])
+    df.loc[h10, "date"] = h10_available_dates(df.loc[h10, "observation_date"])
+    df = df.dropna(subset=["date"])
     df["priority"] = df["source"].map({"fred_csv": 0, "treasury_yield_curve_xml": 1, "twse": 1, "yahoo_finance": 2}).fillna(9)
-    return df.sort_values(["symbol", "date", "priority"]).drop_duplicates(["symbol", "date"], keep="first").drop(columns=["priority"])
+    # Prefer the newest economic observation available, then source priority.
+    # A late-arriving older FRED observation must not replace newer market data.
+    df = df.sort_values(["symbol", "date", "observation_date", "priority"], ascending=[True, True, False, True])
+    df = df.drop_duplicates(["symbol", "date"], keep="first")
+    latest_observed = df.groupby("symbol")["observation_date"].cummax()
+    return df[df["observation_date"] == latest_observed].drop(columns=["priority"])
 
 
 def _load_foreign_flow(session: Session) -> pd.DataFrame:
@@ -84,7 +105,7 @@ def _load_foreign_flow(session: Session) -> pd.DataFrame:
     if df.empty:
         return df
     df["date"] = _date_only(df["date"])
-    return df.groupby("date", as_index=False)["foreign_flow"].sum()
+    return df.groupby("date", as_index=False)["foreign_flow"].sum(min_count=1)
 
 
 def _market_series_with_missing_flag(
@@ -93,15 +114,17 @@ def _market_series_with_missing_flag(
     max_stale_days: int,
 ) -> tuple[pd.Series, pd.Series]:
     values = values.dropna().sort_index()
-    aligned = values.reindex(target_index).ffill()
-    observed_at = pd.Series(values.index, index=values.index).reindex(target_index).ffill()
+    # Keep observations on source-only dates (e.g. a Taiwan holiday).
+    union = values.index.union(target_index).sort_values()
+    aligned = values.reindex(union).ffill().reindex(target_index)
+    observed_at = pd.Series(values.index, index=values.index).reindex(union).ffill().reindex(target_index)
     stale_days = (pd.Series(target_index, index=target_index) - observed_at).dt.days
     missing = observed_at.isna() | (stale_days > max_stale_days)
     return aligned.mask(missing), missing.astype(int)
 
 
-def build_feature_frame(session: Session) -> pd.DataFrame:
-    fx = _load_fx(session)
+def build_feature_frame(session: Session, source_policy: str = "prefer_official") -> pd.DataFrame:
+    fx = _load_fx(session, source_policy=source_policy)
     if fx.empty:
         return pd.DataFrame()
     app_settings = settings()
@@ -191,9 +214,14 @@ def build_feature_frame(session: Session) -> pd.DataFrame:
             tsmc_volume, _ = _market_series_with_missing_flag(volume_pivot["2330.TW"], frame.index, max_market_stale_days)
             derived["TSMC_VOLUME_ZSCORE"] = zscore(tsmc_volume, 252)
 
+    if market.empty:
+        for prefix in ["DXY", "BROAD_USD_INDEX", "US2Y", "US10Y", "VIX", "SP500", "NASDAQ",
+                       "CNH", "CNY", "KRW", "JPY", "TAIEX", "TSMC", "TSM_ADR", "CHINA_FX_PROXY"]:
+            derived[f"{prefix}_DATA_MISSING"] = 1
+
     foreign = _load_foreign_flow(session)
     if not foreign.empty:
-        flow = foreign.set_index("date")["foreign_flow"].reindex(frame.index).fillna(0)
+        flow = foreign.set_index("date")["foreign_flow"].reindex(frame.index)
         derived["FOREIGN_FLOW_1D"] = flow.rolling(1).sum()
         derived["FOREIGN_FLOW_3D"] = flow.rolling(3).sum()
         derived["FOREIGN_FLOW_5D"] = flow.rolling(5).sum()
@@ -220,8 +248,8 @@ def _china_fx_proxy(derived: dict[str, Any]) -> pd.Series | None:
     return None
 
 
-def persist_features(session: Session, feature_set: str = "daily_v1") -> FeatureBuildResult:
-    df = build_feature_frame(session)
+def persist_features(session: Session, feature_set: str = "daily_v3") -> FeatureBuildResult:
+    df = build_feature_frame(session, source_policy=settings().get("features", {}).get("fx_source_policy", "official_only"))
     if df.empty:
         return FeatureBuildResult(rows=0, start_date=None, end_date=None)
     now = datetime.now(timezone.utc)
@@ -235,5 +263,10 @@ def persist_features(session: Session, feature_set: str = "daily_v1") -> Feature
         }
         for _, row in df.iterrows()
     ]
+    # A rebuild must not retain obsolete future bars from an earlier partial feed.
+    session.execute(delete(Feature).where(
+        Feature.feature_set == feature_set, Feature.source == "feature_builder",
+        Feature.observed_at_utc > df["date"].max().to_pydatetime(),
+    ))
     count = upsert_rows(session, Feature, rows, ("feature_set", "observed_at_utc", "source"))
     return FeatureBuildResult(rows=count, start_date=str(df["date"].min().date()), end_date=str(df["date"].max().date()))

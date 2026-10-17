@@ -26,6 +26,16 @@ from app.providers.yahoo import YahooFinanceProvider
 
 cli = typer.Typer(help="Phase 1 data ingestion for real production sources.")
 
+REQUIRED_PROVIDERS = {"fx:cbc_usdtwd_close", "bank:usd_sell_with_fallback"}
+
+
+def ingestion_summary(results: list[ProviderResult]) -> dict:
+    successful = {item.name for item in results if item.ok and item.rows > 0}
+    missing_required = sorted(REQUIRED_PROVIDERS - successful)
+    failed = [item.name for item in results if not item.ok]
+    return {"status": "FAILED" if missing_required else "DEGRADED" if failed else "OK",
+            "missing_required": missing_required, "failed_providers": failed}
+
 
 def _common_provider_kwargs(cfg: dict) -> dict:
     providers = cfg["providers"]
@@ -116,14 +126,27 @@ def _ingest_treasury_yields(session, provider: TreasuryYieldCurveProvider) -> in
     return rows
 
 
-def _ingest_fred_batch(session, provider: FredCsvProvider, series: dict[str, str]) -> tuple[int, set[str]]:
-    frames = provider.fetch_series_batch(series)
-    rows = 0
+def _ingest_fred_with_fallback(session, provider: FredCsvProvider, series: dict[str, str]) -> tuple[list[ProviderResult], set[str]]:
+    try:
+        frames = provider.fetch_series_batch(series)
+    except Exception as exc:  # noqa: BLE001
+        structlog.get_logger().warning("fred_batch_fallback", error=str(exc), strategy="individual_official_series")
+        frames = None
+    results = []
     written = set()
-    for name, frame in frames.items():
-        rows += _write_market_data(session, provider.source, name.upper(), frame)
-        written.add(name)
-    return rows, written
+    for name, series_id in series.items():
+        def ingest_one(name=name, series_id=series_id):
+            if frames is not None and name in frames:
+                frame = frames[name]
+            else:
+                frame = provider.fetch_series(series_id)
+            rows = _write_market_data(session, provider.source, name.upper(), frame)
+            if not rows:
+                raise ProviderError(f"FRED returned no usable observations for {series_id}")
+            written.add(name)
+            return rows
+        results.append(_result(f"fred:{name}", ingest_one))
+    return results, written
 
 
 @cli.command()
@@ -136,15 +159,8 @@ def run(database_url: str | None = typer.Option(None, help="Override DATABASE_UR
     results: list[ProviderResult] = []
 
     fred = FredCsvProvider(**provider_kwargs)
-    fred_written: set[str] = set()
-
-    def ingest_fred() -> int:
-        rows, written = _ingest_fred_batch(session, fred, cfg["providers"]["fred"]["series"])
-        fred_written.update(written)
-        return rows
-
-    fred_result = _result("fred:batch", ingest_fred)
-    results.append(fred_result)
+    fred_results, fred_written = _ingest_fred_with_fallback(session, fred, cfg["providers"]["fred"]["series"])
+    results.extend(fred_results)
 
     if not {"us_2y", "us_10y"}.issubset(fred_written):
         treasury = TreasuryYieldCurveProvider(**provider_kwargs)
@@ -197,7 +213,7 @@ def run(database_url: str | None = typer.Option(None, help="Override DATABASE_UR
                         "foreign_net_buy_sell_shares": row["foreign_net_buy_sell_shares"],
                         "raw_payload": None,
                     }
-                    for row in twse.fetch_foreign_flow().to_dict("records")
+                    for row in twse.fetch_latest_foreign_flow().to_dict("records")
                 ],
                 ("market", "observed_at_utc", "source"),
             ),
@@ -257,9 +273,11 @@ def run(database_url: str | None = typer.Option(None, help="Override DATABASE_UR
         else:
             log.warning("ingestion_provider_failed", provider=item.name, error=item.error)
 
-    failed = [item for item in results if not item.ok]
-    log.info("ingestion_finished", providers=len(results), failed=len(failed), rows=sum(item.rows for item in results if item.ok))
-    if failed:
+    summary = ingestion_summary(results)
+    log.info("ingestion_finished", providers=len(results), rows=sum(item.rows for item in results if item.ok), **summary)
+    # Supplemental outages retain explicit failure logs and existing freshness
+    # guards. They must not prevent collecting genuine CBC/bank observations.
+    if summary["missing_required"]:
         raise typer.Exit(code=2)
 
 

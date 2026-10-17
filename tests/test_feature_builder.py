@@ -85,18 +85,21 @@ def test_market_features_mark_stale_forward_filled_data_missing():
     assert stale_row["DXY_CLOSE"] != stale_row["DXY_CLOSE"]
 
 
-def test_market_features_prefer_fred_over_yahoo_same_day():
+def test_market_features_respect_source_availability_lags():
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(engine)
     observed = datetime(2026, 1, 1, tzinfo=timezone.utc)
     with Session(engine) as session:
-        session.add(FxPrice(observed_at_utc=observed, source="test", pair="USD/TWD", open=31, high=31, low=31, close=31, volume=None))
+        for day in range(1, 4):
+            session.add(FxPrice(observed_at_utc=datetime(2026, 1, day, tzinfo=timezone.utc), source="test", pair="USD/TWD", open=31, high=31, low=31, close=31, volume=None))
         session.add(MarketData(observed_at_utc=observed, source="yahoo_finance", symbol="DXY", open=None, high=None, low=None, close=99, volume=None))
         session.add(MarketData(observed_at_utc=observed, source="fred_csv", symbol="DXY", open=None, high=None, low=None, close=101, volume=None))
         session.commit()
         features = build_feature_frame(session)
 
-    assert features.iloc[0]["DXY_CLOSE"] == 101
+    assert features.iloc[0]["DXY_DATA_MISSING"] == 1
+    assert features.iloc[1]["DXY_CLOSE"] == 99
+    assert features.iloc[2]["DXY_CLOSE"] == 101
 
 
 def test_build_feature_frame_adds_china_fx_proxy_from_cny_history():

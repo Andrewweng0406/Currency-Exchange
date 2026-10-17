@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -35,7 +36,7 @@ def latest_risk_snapshot(session) -> RiskSnapshot:
     if features.empty:
         raise ValueError("No features available")
     latest = features.iloc[-1]
-    predictions = _latest_predictions(session)
+    predictions = _latest_predictions(session, latest["date"])
     policy = risk_policy()
     components = _risk_components(latest, predictions)
     weights = policy["risk_score"]["weights"]
@@ -63,7 +64,6 @@ def latest_risk_snapshot(session) -> RiskSnapshot:
             for horizon in ["1d", "5d", "20d"]
         },
     )
-    _apply_risk_to_latest_predictions(session, predictions, score_int)
     return snapshot
 
 
@@ -86,11 +86,11 @@ def opportunity_score(features: pd.DataFrame, policy: dict[str, Any] | None = No
 
 def detect_regime(row: pd.Series) -> list[str]:
     regimes = []
-    dxy_20d = float(row.get("DXY_RETURN_20D") or row.get("BROAD_USD_INDEX_RETURN_20D") or 0)
-    usdtwd_vol = float(row.get("USDTWD_VOLATILITY_20D") or 0)
-    vix_change = float(row.get("VIX_CHANGE_5D") or 0)
-    sp500_return = float(row.get("SP500_RETURN_5D") or 0)
-    usdtwd_20d = float(row.get("USDTWD_RETURN_20D") or 0)
+    dxy_20d = _finite_first(row.get("DXY_RETURN_20D"), row.get("BROAD_USD_INDEX_RETURN_20D"))
+    usdtwd_vol = _finite_first(row.get("USDTWD_VOLATILITY_20D"))
+    vix_change = _finite_first(row.get("VIX_CHANGE_5D"))
+    sp500_return = _finite_first(row.get("SP500_RETURN_5D"))
+    usdtwd_20d = _finite_first(row.get("USDTWD_RETURN_20D"))
     asia = _asia_pressure(row)
     if vix_change > 3 or sp500_return < -0.03:
         regimes.append("RISK_OFF")
@@ -103,14 +103,16 @@ def detect_regime(row: pd.Series) -> list[str]:
     return regimes
 
 
-def _latest_predictions(session) -> dict[str, Prediction]:
+def _latest_predictions(session, as_of=None) -> dict[str, Prediction]:
     rows = session.execute(
         select(Prediction)
-        .where(Prediction.model_version == "phase4_ensemble_v1")
+        .where(Prediction.model_version == "phase4_ensemble_v3")
         .order_by(Prediction.observed_at_utc.desc())
     ).scalars().all()
     out = {}
     for row in rows:
+        if as_of is not None and pd.to_datetime(row.observed_at_utc, utc=True) != pd.to_datetime(as_of, utc=True):
+            continue
         out.setdefault(row.horizon, row)
     return out
 
@@ -122,16 +124,27 @@ def _risk_components(row: pd.Series, predictions: dict[str, Prediction]) -> dict
         "prediction_5d": float(prob_5d) * 100,
         "prediction_20d": float(prob_20d) * 100,
         "recent_usdtwd_momentum": _scaled_centered(row.get("USDTWD_RETURN_5D"), scale=0.015),
-        "dxy_momentum": _scaled_centered(row.get("DXY_RETURN_5D") or row.get("BROAD_USD_INDEX_RETURN_5D"), scale=0.015),
+        "dxy_momentum": _scaled_centered(_finite_first(row.get("DXY_RETURN_5D"), row.get("BROAD_USD_INDEX_RETURN_5D")), scale=0.015),
         "rates_pressure": _scaled_centered(row.get("US2Y_CHANGE_5D"), scale=0.15),
         "asia_fx_pressure": _asia_pressure(row),
         "global_risk_off": _global_risk_off(row),
-        "data_quality_penalty": 100 - float(row.get("DATA_COMPLETENESS", 0.5) or 0.5) * 100,
+        "data_quality_penalty": 100 - _finite_first(row.get("DATA_COMPLETENESS"), default=0.0) * 100,
     }
 
 
+def _finite_first(*values: Any, default: float = 0.0) -> float:
+    for value in values:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(number):
+            return number
+    return default
+
+
 def _scaled_centered(value: Any, scale: float) -> float:
-    value = float(value or 0)
+    value = _finite_first(value)
     return max(0, min(100, 50 + 50 * value / scale))
 
 
@@ -149,9 +162,9 @@ def _asia_pressure(row: pd.Series) -> float:
 
 
 def _global_risk_off(row: pd.Series) -> float:
-    vix = float(row.get("VIX_CHANGE_5D") or 0)
-    sp = float(row.get("SP500_RETURN_5D") or 0)
-    nasdaq = float(row.get("NASDAQ_RETURN_5D") or 0)
+    vix = _finite_first(row.get("VIX_CHANGE_5D"))
+    sp = _finite_first(row.get("SP500_RETURN_5D"))
+    nasdaq = _finite_first(row.get("NASDAQ_RETURN_5D"))
     pressure = 50 + max(0, vix) * 3 + max(0, -sp) * 600 + max(0, -nasdaq) * 400
     return max(0, min(100, pressure))
 
@@ -159,8 +172,8 @@ def _global_risk_off(row: pd.Series) -> float:
 def _confidence(row: pd.Series, predictions: dict[str, Prediction]) -> float:
     model_conf = [p.confidence for p in predictions.values() if p.confidence is not None]
     base = sum(model_conf) / len(model_conf) if model_conf else 0.5
-    completeness = float(row.get("DATA_COMPLETENESS", 0.5) or 0.5)
-    volatility_penalty = min(0.25, float(row.get("USDTWD_VOLATILITY_20D") or 0) * 20)
+    completeness = _finite_first(row.get("DATA_COMPLETENESS"), default=0.0)
+    volatility_penalty = min(0.25, _finite_first(row.get("USDTWD_VOLATILITY_20D")) * 20)
     return round(max(0, min(1, 0.60 * base + 0.40 * completeness - volatility_penalty)), 4)
 
 

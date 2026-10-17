@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -134,3 +134,30 @@ class AIInterpretation(TimestampMixin, Base):
     confidence_adjustment: Mapped[float | None] = mapped_column(Float)
     summary_zh_tw: Mapped[str | None] = mapped_column(Text)
     raw_response: Mapped[str | None] = mapped_column(Text)
+
+
+class ForwardSnapshot(Base):
+    __tablename__ = "forward_snapshots"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    protocol_hash: Mapped[str] = mapped_column(String(64), index=True)
+    protocol_json: Mapped[str] = mapped_column(Text)
+    origin_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    horizon: Mapped[str] = mapped_column(String(10))
+    prediction_id: Mapped[int] = mapped_column(Integer)
+    issued_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    recorded_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    payload_json: Mapped[str] = mapped_column(Text)
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    __table_args__ = (UniqueConstraint("protocol_hash", "origin_utc", "horizon", name="uq_forward_origin"),)
+
+
+class ForwardOutcome(Base):
+    __tablename__ = "forward_outcomes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    snapshot_id: Mapped[int] = mapped_column(ForeignKey("forward_snapshots.id"), unique=True, index=True)
+    target_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    evaluated_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    close: Mapped[float] = mapped_column(Float)
+    realized_return: Mapped[float] = mapped_column(Float)
+    target_up: Mapped[int] = mapped_column(Integer)
+    evidence_json: Mapped[str] = mapped_column(Text)

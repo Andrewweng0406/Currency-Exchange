@@ -32,6 +32,7 @@ def generate_alerts(
 ) -> list[AlertCandidate]:
     policy = risk_policy()["alerts"]
     alerts = []
+    advice_allowed = not (data_quality and data_quality.blocks_model_advice)
     if data_quality and data_quality.blocks_model_advice:
         issue = data_quality.issues[0] if data_quality.issues else data_quality.label_zh
         alerts.append(
@@ -45,7 +46,7 @@ def generate_alerts(
             )
         )
     prob_5d = predictions.get("5d", {}).get("prob_up")
-    if prob_5d is not None and prob_5d >= policy["twd_depreciation_warning"]["probability_up_min"]:
+    if advice_allowed and prob_5d is not None and prob_5d >= policy["twd_depreciation_warning"]["probability_up_min"]:
         alerts.append(
             AlertCandidate(
                 alert_type="TWD_DEPRECIATION_WARNING",
@@ -59,7 +60,8 @@ def generate_alerts(
     latest_features = latest_features or {}
     fx_return = latest_features.get("USDTWD_RETURN_1D")
     fx_vol = latest_features.get("USDTWD_VOLATILITY_20D")
-    if fx_return is not None and fx_vol:
+    price_data_allowed = data_quality is None or data_quality.status in {"OK", "LIMITED", "UNVERIFIED_MODEL"}
+    if price_data_allowed and fx_return is not None and fx_vol:
         move_z = abs(float(fx_return)) / max(float(fx_vol), 0.0001)
         if move_z >= policy["sudden_fx_move"]["rolling_zscore_min"]:
             alerts.append(
@@ -72,7 +74,7 @@ def generate_alerts(
                     risk_score=risk.twd_risk_score,
                 )
             )
-    if risk.opportunity_score >= policy["good_exchange_opportunity"]["opportunity_score_min"]:
+    if advice_allowed and risk.opportunity_score >= policy["good_exchange_opportunity"]["opportunity_score_min"]:
         alerts.append(
             AlertCandidate(
                 alert_type="GOOD_EXCHANGE_OPPORTUNITY",

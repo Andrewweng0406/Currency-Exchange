@@ -57,7 +57,7 @@ def test_daily_report_contains_required_language():
     assert "現在偏向適合換" in text
     assert "原因：" in text
     assert "資料狀態：正常" in text
-    assert "5天美元上漲機率約68%" in text
+    assert "5個交易日美元上漲機率約68%" in text
     assert "這是機率與風險提醒，不是保證漲跌" in text
     assert "美元需求" not in text
     assert "已持有" not in text

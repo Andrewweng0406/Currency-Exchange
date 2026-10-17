@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +18,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier, XGBRegressor
+from sqlalchemy import select
 
 from app.backtesting.dataset import add_forward_targets, load_feature_frame, modeling_columns
 from app.backtesting.metrics import classification_metrics
@@ -23,9 +26,21 @@ from app.backtesting.splits import yearly_expanding_splits
 from app.config import ROOT
 from app.database.schema import ModelPerformance, Prediction
 from app.database.upsert import upsert_rows
+from app.models.baselines import ConstantProbabilityModel
 
 HORIZON_DAYS = {"1d": 1, "5d": 5, "20d": 20}
-MODEL_VERSION = "phase4_ensemble_v1"
+MODEL_VERSION = "phase4_ensemble_v3"
+
+
+def _save_artifact(artifact: dict, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=destination.parent, suffix=".joblib", delete=False) as handle:
+        temporary = Path(handle.name)
+    try:
+        joblib.dump(artifact, temporary)
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 class TimeSeriesDirectionModel:
@@ -60,8 +75,6 @@ class ModelScore:
     roc_auc: float
     brier_score: float
     twd_depreciation_recall: float
-    mae: float
-    rmse: float
     weight: float
 
 
@@ -73,15 +86,18 @@ class HorizonTrainResult:
     splits: int
     scores: list[ModelScore]
     artifact_path: str
+    regression_scores: dict[str, dict[str, float]]
 
 
 def _classification_models(random_state: int = 42) -> dict[str, Any]:
     return {
+        "coin_flip": ConstantProbabilityModel(),
+        "historical_rate": ConstantProbabilityModel(learn_rate=True),
         "logistic": Pipeline(
             [
                 ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
                 ("scaler", StandardScaler()),
-                ("model", LogisticRegression(max_iter=1000, class_weight="balanced")),
+                ("model", LogisticRegression(max_iter=1000)),
             ]
         ),
         "xgboost": Pipeline(
@@ -145,7 +161,10 @@ def prepare_training_frame(session, horizon: str) -> tuple[pd.DataFrame, list[st
 
 def train_horizon(session, horizon: str, min_train_years: int = 5) -> HorizonTrainResult:
     frame, cols, target_up, target_return = prepare_training_frame(session, horizon)
-    splits = yearly_expanding_splits(frame, min_train_years=min_train_years)
+    splits = yearly_expanding_splits(
+        frame, min_train_years=min_train_years,
+        label_end_col=f"TARGET_END_{HORIZON_DAYS[horizon]}D",
+    )
     if not splits:
         raise ValueError(f"Not enough data to create walk-forward splits for {horizon}")
 
@@ -193,8 +212,6 @@ def train_horizon(session, horizon: str, min_train_years: int = 5) -> HorizonTra
             roc_auc=metrics.roc_auc,
             brier_score=metrics.brier_score,
             twd_depreciation_recall=metrics.twd_depreciation_recall,
-            mae=reg_scores.get("ridge", {}).get("mae", math.nan),
-            rmse=reg_scores.get("ridge", {}).get("rmse", math.nan),
             weight=weights[name],
         )
         for name, metrics in clf_scores.items()
@@ -225,11 +242,13 @@ def train_horizon(session, horizon: str, min_train_years: int = 5) -> HorizonTra
             "method": "historical_forward_return_quantiles",
         },
         "scores": [asdict(score) for score in scores],
+        "regression_scores": reg_scores,
+        "feature_set": "daily_v3",
+        "training_up_rate": float(y.mean()),
         "trained_at_utc": datetime.now(timezone.utc).isoformat(),
     }
     artifact_path = ROOT / "models" / "artifacts" / f"{MODEL_VERSION}_{horizon}.joblib"
-    artifact_path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(artifact, artifact_path)
+    _save_artifact(artifact, artifact_path)
     _persist_performance(session, scores)
     _persist_latest_prediction(session, _latest_feature_frame(session), artifact)
     return HorizonTrainResult(
@@ -239,18 +258,29 @@ def train_horizon(session, horizon: str, min_train_years: int = 5) -> HorizonTra
         splits=len(splits),
         scores=scores,
         artifact_path=str(artifact_path.relative_to(ROOT)),
+        regression_scores=reg_scores,
     )
 
 
 def _weights_from_scores(scores: dict[str, Any]) -> dict[str, float]:
-    raw = {}
-    for name, metrics in scores.items():
-        auc_component = 0.5 if math.isnan(metrics.roc_auc) else max(0.0, metrics.roc_auc)
-        brier_component = max(0.0, 1.0 - metrics.brier_score)
-        recall_component = 0.5 if math.isnan(metrics.twd_depreciation_recall) else metrics.twd_depreciation_recall
-        raw[name] = max(0.001, 0.45 * auc_component + 0.35 * brier_component + 0.20 * recall_component)
+    if not scores:
+        raise ValueError("No validation scores available")
+    # Reward proper probability scoring, rather than recall that can be inflated
+    # by always forecasting USD up. Retain the simple baseline if nobody beats it.
+    baselines = [name for name in ("coin_flip", "historical_rate") if name in scores
+                 and math.isfinite(scores[name].brier_score)]
+    baseline_name = min(baselines, key=lambda name: scores[name].brier_score) if baselines else None
+    reference = min(0.25, scores[baseline_name].brier_score) if baseline_name else 0.25
+    raw = {
+        name: max(0.0, reference - metrics.brier_score) if math.isfinite(metrics.brier_score) else 0.0
+        for name, metrics in scores.items()
+    }
     total = sum(raw.values())
-    return {name: value / total for name, value in raw.items()}
+    if total > 0:
+        return {name: value / total for name, value in raw.items()}
+    if baseline_name is not None:
+        return {name: float(name == baseline_name) for name in scores}
+    raise ValueError("No model beats 50% and no deployable probability baseline is present")
 
 
 def _persist_performance(session, scores: list[ModelScore]) -> None:
@@ -283,6 +313,13 @@ def _persist_latest_prediction(session, frame: pd.DataFrame, artifact: dict[str,
     if latest.empty:
         return
     row = latest.iloc[0]
+    existing = session.execute(select(Prediction.id).where(
+        Prediction.model_version == artifact["model_version"], Prediction.horizon == artifact["horizon"],
+        Prediction.observed_at_utc == pd.Timestamp(row["date"]).to_pydatetime(),
+        Prediction.source == "model_training_latest",
+    ).limit(1)).scalar_one_or_none()
+    if existing is not None:
+        return  # Preserve the first issued prediction; retraining must not rewrite evidence.
     x = latest.reindex(columns=artifact["feature_columns"])
     probs = {
         name: float(model.predict_proba(x)[:, 1][0])
@@ -295,7 +332,8 @@ def _persist_latest_prediction(session, frame: pd.DataFrame, artifact: dict[str,
     prob_up = sum(probs[name] * artifact["classification_weights"][name] for name in probs)
     expected_return = float(np.mean(list(returns.values())))
     agreement = 1 - float(np.std(list(probs.values())))
-    data_completeness = float(row.get("DATA_COMPLETENESS", 0.5) or 0.5)
+    completeness_value = row.get("DATA_COMPLETENESS")
+    data_completeness = float(completeness_value) if pd.notna(completeness_value) else 0.0
     confidence = max(0.0, min(1.0, 0.65 * agreement + 0.35 * data_completeness))
     snapshot_keys = [
         "USDTWD_CLOSE",
@@ -306,6 +344,10 @@ def _persist_latest_prediction(session, frame: pd.DataFrame, artifact: dict[str,
         "DATA_COMPLETENESS",
     ]
     snapshot = {key: _json_safe(row.get(key)) for key in snapshot_keys if key in row}
+    snapshot["confidence_method"] = "data_completeness_and_model_agreement_not_accuracy"
+    snapshot["issued_at_utc"] = datetime.now(timezone.utc).isoformat()
+    snapshot["training_up_rate"] = artifact.get("training_up_rate")
+    snapshot["feature_set"] = artifact.get("feature_set")
     snapshot["component_probabilities"] = probs
     snapshot["component_expected_returns"] = returns
     snapshot["prediction_interval_80"] = artifact.get("prediction_interval_80")

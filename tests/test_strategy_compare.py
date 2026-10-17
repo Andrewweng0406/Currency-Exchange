@@ -11,14 +11,15 @@ from app.backtesting.strategy_compare import (
     summarize_strategy_comparison,
 )
 import pandas as pd
+import pytest
 
 
 def test_strategy_costs():
     window = pd.DataFrame(
         {
-            "date": pd.date_range("2026-01-01", periods=10, tz="UTC"),
-            "USDTWD_CLOSE": [31, 31.1, 31.2, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8, 31.9],
-            "prob_up": [0.5] * 10,
+            "date": pd.date_range("2026-01-01", periods=31, tz="UTC"),
+            "USDTWD_CLOSE": [31 + i / 10 for i in range(31)],
+            "prob_up": [0.5] * 31,
         }
     )
     assert _fixed(window, 1000) == 31000
@@ -29,25 +30,25 @@ def test_strategy_costs():
 def test_model_timing_once_buys_when_depreciation_risk_is_high():
     window = pd.DataFrame(
         {
-            "date": pd.date_range("2026-01-01", periods=10, tz="UTC"),
-            "USDTWD_CLOSE": [31, 31.1, 31.2, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8, 31.9],
-            "prob_up": [0.4, 0.66, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
-            "opportunity_score": [0] * 10,
+            "date": pd.date_range("2026-01-01", periods=31, tz="UTC"),
+            "USDTWD_CLOSE": [31 + i / 10 for i in range(31)],
+            "prob_up": [0.4, 0.66] + [0.4] * 29,
+            "opportunity_score": [0] * 31,
         }
     )
-    assert _model_timing_once(window, 1000) == 31100
+    assert _model_timing_once(window, 1000) == 31200
 
 
 def test_model_timing_once_waits_until_deadline_when_no_signal():
     window = pd.DataFrame(
         {
-            "date": pd.date_range("2026-01-01", periods=10, tz="UTC"),
-            "USDTWD_CLOSE": [31, 31.1, 31.2, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8, 31.9],
-            "prob_up": [0.5] * 10,
-            "opportunity_score": [0] * 10,
+            "date": pd.date_range("2026-01-01", periods=31, tz="UTC"),
+            "USDTWD_CLOSE": [31 + i / 10 for i in range(31)],
+            "prob_up": [0.5] * 31,
+            "opportunity_score": [0] * 31,
         }
     )
-    assert _model_timing_once(window, 1000) == 31600
+    assert _model_timing_once(window, 1000) == pytest.approx(33700)
 
 
 def test_strategy_summary_marks_model_timing_failure_honestly():
@@ -93,10 +94,10 @@ def test_strategy_report_is_conservative_when_results_are_mixed():
 def test_strategy_records_accepts_policy_override():
     window = pd.DataFrame(
         {
-            "date": pd.date_range("2026-01-01", periods=10, tz="UTC"),
-            "USDTWD_CLOSE": [31, 31.1, 31.2, 31.3, 31.4, 31.5, 31.6, 31.7, 31.8, 31.9],
-            "prob_up": [0.70] * 10,
-            "opportunity_score": [0] * 10,
+            "date": pd.date_range("2026-01-01", periods=31, tz="UTC"),
+            "USDTWD_CLOSE": [31 + i / 10 for i in range(31)],
+            "prob_up": [0.70] * 31,
+            "opportunity_score": [0] * 31,
         }
     )
     policy = TimingPolicy(
@@ -105,9 +106,9 @@ def test_strategy_records_accepts_policy_override():
         favorable_probability_up_max=0.20,
         deadline_buffer_days=1,
     )
-    records = _strategy_records(window, 1000, policy)
+    records = _strategy_records(window, 1000, policy, completed_before=pd.Timestamp("2026-02-01", tz="UTC"))
     assert len(records["model_timing_once"]) == 1
-    assert records["model_timing_once"][0][0] == 31800
+    assert records["model_timing_once"][0][0] == pytest.approx(33900)
 
 
 def test_select_policy_uses_training_window_only():

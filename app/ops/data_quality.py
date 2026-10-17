@@ -41,18 +41,28 @@ class DataQualitySummary:
 
 def data_coverage_report(session) -> dict[str, Any]:
     coverage = [
-        _coverage(session, FxPrice, "fx_prices:USD/TWD"),
-        _coverage(session, BankRate, "bank_rates:USD"),
+        _coverage(session, FxPrice, "fx_prices:USD/TWD", extra_filter=(FxPrice.pair == "USD/TWD")),
+        _coverage(session, BankRate, "bank_rates:USD", extra_filter=(BankRate.currency == "USD")),
         _coverage(session, MarketData, "market_data"),
         _coverage(session, ForeignFlow, "foreign_flows:TWSE"),
-        _coverage(session, Feature, "features:daily_v1", extra_filter=(Feature.feature_set == "daily_v1")),
-        _coverage(session, Prediction, "predictions"),
+        _coverage(session, Feature, "features:daily_v3", extra_filter=(Feature.feature_set == "daily_v3")),
+        _coverage(session, Prediction, "predictions", extra_filter=(Prediction.model_version == "phase4_ensemble_v3")),
     ]
     features = load_feature_frame(session)
+    prediction_alignment = []
+    if not features.empty:
+        feature_date = pd.to_datetime(features.iloc[-1]["date"], utc=True)
+        for horizon in ("1d", "5d", "20d"):
+            latest_prediction = session.execute(select(func.max(Prediction.observed_at_utc)).where(
+                Prediction.model_version == "phase4_ensemble_v3", Prediction.horizon == horizon,
+            )).scalar_one()
+            if latest_prediction is None or pd.to_datetime(latest_prediction, utc=True) != feature_date:
+                prediction_alignment.append(f"{horizon} 預測缺失或未與最新特徵對齊")
     quality = _feature_quality(features)
     return {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "coverage": [item.__dict__ for item in coverage],
+        "prediction_alignment_issues": prediction_alignment,
         "feature_quality": [item.__dict__ for item in quality],
         "overall_status": _overall_status(coverage, quality),
     }
@@ -62,7 +72,7 @@ def summarize_data_quality(report: dict[str, Any]) -> DataQualitySummary:
     coverage = report.get("coverage", [])
     quality = report.get("feature_quality", [])
 
-    blocking_issues = []
+    blocking_issues = list(report.get("prediction_alignment_issues", []))
     for item in coverage:
         dataset = str(item.get("dataset", ""))
         status = item.get("status")
@@ -126,6 +136,9 @@ def _coverage(session, model, label: str, extra_filter: Any = None) -> CoverageC
     if rows == 0:
         status = "FAIL"
         limitations.append("no rows available")
+    elif end is not None and (end - datetime.now(timezone.utc)).total_seconds() > 86400:
+        status = "FAIL"
+        limitations.append("latest observation is more than one day in the future")
     elif age is not None and age > 7:
         status = "STALE"
         limitations.append("latest observation is older than 7 days")
@@ -201,7 +214,7 @@ def _overall_status(coverage: list[CoverageCheck], quality: list[FeatureQualityC
 
 
 def _is_core_dataset(dataset: str) -> bool:
-    return dataset.startswith(("fx_prices:USD/TWD", "bank_rates:USD", "features:daily_v1", "predictions"))
+    return dataset.startswith(("fx_prices:USD/TWD", "bank_rates:USD", "features:daily_v3", "predictions"))
 
 
 _CORE_LATEST_FEATURES = {

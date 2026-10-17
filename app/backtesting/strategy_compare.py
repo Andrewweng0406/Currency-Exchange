@@ -6,6 +6,8 @@ from itertools import product
 import pandas as pd
 
 from app.config import risk_policy
+from app.backtesting.exchange_strategy import _validate_request
+from app.backtesting.uncertainty import block_mean_interval
 from app.models.walkforward import walk_forward_probabilities
 from app.risk.scoring import opportunity_score
 
@@ -21,6 +23,8 @@ class StrategyComparison:
     savings_vs_fixed_day_twd: float
     average_regret: float
     beat_fixed_rate: float
+    savings_ci_low: float | None = None
+    savings_ci_high: float | None = None
 
 
 @dataclass(frozen=True)
@@ -34,6 +38,8 @@ class StrategySummary:
     volatility_difference: float
     beat_fixed_rate: float
     conclusion_zh: str
+    savings_ci_low: float | None = None
+    savings_ci_high: float | None = None
 
 
 @dataclass(frozen=True)
@@ -105,8 +111,8 @@ def walk_forward_tune_strategy(session, target_usd: float = 10_000, start_year: 
         if train["date"].dt.year.nunique() < min_train_years:
             continue
         test = predictions[predictions["date"].dt.year == year]
-        policy, train_score, train_payments = _select_policy(train, target_usd)
-        test_records = _strategy_records(test, target_usd, policy)
+        policy, train_score, train_payments = _select_policy(train, target_usd, completed_before=test["date"].min())
+        test_records = _strategy_records(test, target_usd, policy, completed_before=predictions["date"].max())
         comparisons = _comparisons_from_records(test_records, target_usd)
         summary = summarize_strategy_comparison(comparisons)
         if summary is None:
@@ -132,19 +138,24 @@ def walk_forward_tune_strategy(session, target_usd: float = 10_000, start_year: 
     return WalkForwardTuningResult(start_year=start_year, target_usd=target_usd, years=tuned_years, summary=combined_summary)
 
 
-def _compare_from_predictions(predictions: pd.DataFrame, target_usd: float, policy: TimingPolicy | None = None) -> list[StrategyComparison]:
-    return _comparisons_from_records(_strategy_records(predictions, target_usd, policy), target_usd)
+def _compare_from_predictions(predictions: pd.DataFrame, target_usd: float, policy: TimingPolicy | None = None, completed_before=None, include_uncertainty=True) -> list[StrategyComparison]:
+    return _comparisons_from_records(_strategy_records(predictions, target_usd, policy, completed_before), target_usd, include_uncertainty)
 
 
-def _strategy_records(predictions: pd.DataFrame, target_usd: float, policy: TimingPolicy | None = None) -> dict[str, list[tuple[float, float, float]]]:
+def _strategy_records(predictions: pd.DataFrame, target_usd: float, policy: TimingPolicy | None = None, completed_before=None) -> dict[str, list[tuple[float, float, float]]]:
+    _validate_request(target_usd)
     if predictions.empty:
         return {"fixed_day_once": [], "equal_tranches": [], "model_timing_once": []}
     predictions = predictions.copy()
     records = {"fixed_day_once": [], "equal_tranches": [], "model_timing_once": []}
-    payments = predictions.groupby([predictions["date"].dt.year, predictions["date"].dt.month]).tail(1)["date"].tolist()
-    for payment in payments:
-        window = predictions[(predictions["date"] <= payment) & (predictions["date"] >= payment - pd.Timedelta(days=30))]
-        if len(window) < 5:
+    predictions["date"] = pd.to_datetime(predictions["date"], utc=True)
+    predictions = predictions.sort_values("date")
+    boundary = pd.Timestamp(completed_before) if completed_before is not None else predictions["date"].max()
+    completed_month = boundary.tz_localize(None).to_period("M") if boundary.tzinfo else boundary.to_period("M")
+    months = predictions["date"].dt.tz_localize(None).dt.to_period("M")
+    for month, window in predictions.groupby(months):
+        # A budget belongs to one calendar month; never settle a partial month.
+        if month >= completed_month or len(window) < 10 or window["date"].dt.day.min() > 7 or window["date"].dt.day.max() < 22:
             continue
         fixed_cost = _fixed(window, target_usd)
         tranche_cost = _tranches(window, target_usd)
@@ -156,7 +167,7 @@ def _strategy_records(predictions: pd.DataFrame, target_usd: float, policy: Timi
     return records
 
 
-def _comparisons_from_records(records: dict[str, list[tuple[float, float, float]]], target_usd: float) -> list[StrategyComparison]:
+def _comparisons_from_records(records: dict[str, list[tuple[float, float, float]]], target_usd: float, include_uncertainty=True) -> list[StrategyComparison]:
     fixed_avg = _average_cost(records.get("fixed_day_once", []))
     comparisons = []
     for name, values in records.items():
@@ -165,6 +176,8 @@ def _comparisons_from_records(records: dict[str, list[tuple[float, float, float]
         costs = pd.Series([v[0] for v in values])
         regrets = pd.Series([v[0] - v[1] for v in values])
         fixed_costs = pd.Series([v[2] for v in values])
+        ci_low, ci_high = (block_mean_interval(fixed_costs - costs, 3)
+                           if len(values) >= 2 and include_uncertainty else (None, None))
         comparisons.append(
             StrategyComparison(
                 strategy=name,
@@ -176,6 +189,8 @@ def _comparisons_from_records(records: dict[str, list[tuple[float, float, float]
                 savings_vs_fixed_day_twd=float(fixed_avg - costs.mean()),
                 average_regret=float(regrets.mean()),
                 beat_fixed_rate=float((costs < fixed_costs).mean()),
+                savings_ci_low=ci_low,
+                savings_ci_high=ci_high,
             )
         )
     return comparisons
@@ -190,11 +205,14 @@ def summarize_strategy_comparison(comparisons: list[StrategyComparison]) -> Stra
     average_rate_difference = model.average_rate - fixed.average_rate
     worst_rate_difference = model.worst_rate - fixed.worst_rate
     volatility_difference = model.cost_volatility - fixed.cost_volatility
-    passed = model.savings_vs_fixed_day_twd > 0 and worst_rate_difference <= 0 and volatility_difference <= 0
+    passed = (model.savings_vs_fixed_day_twd > 0 and worst_rate_difference <= 0 and volatility_difference <= 0
+              and model.payments >= 24 and model.savings_ci_low is not None and model.savings_ci_low > 0)
     if passed:
-        conclusion = "模型選時策略在此回測期間優於固定日期，且沒有提高最差匯率或成本波動。"
-    elif model.savings_vs_fixed_day_twd > 0:
+        conclusion = "研究樣本的平均成本及風險指標較佳，且區塊成本差異下界大於零；仍未驗證實際銀行換匯。"
+    elif model.savings_vs_fixed_day_twd > 0 and (worst_rate_difference > 0 or volatility_difference > 0):
         conclusion = "模型選時策略平均成本較低，但最差情境或成本波動沒有同步改善，暫時不應視為全面勝出。"
+    elif model.savings_vs_fixed_day_twd > 0:
+        conclusion = "平均成本較低，但月份數或成本差異的區塊區間尚不足以確認優勢，不能宣稱策略已勝出。"
     else:
         conclusion = "模型選時策略在此回測期間沒有打敗固定日期，目前只能作為風險提醒，不能宣稱能省錢。"
     return StrategySummary(
@@ -207,6 +225,8 @@ def summarize_strategy_comparison(comparisons: list[StrategyComparison]) -> Stra
         volatility_difference=volatility_difference,
         beat_fixed_rate=model.beat_fixed_rate,
         conclusion_zh=conclusion,
+        savings_ci_low=model.savings_ci_low,
+        savings_ci_high=model.savings_ci_high,
     )
 
 
@@ -241,13 +261,13 @@ def build_strategy_report(comparisons: list[StrategyComparison], target_usd: flo
     if summary.passed:
         verdict = "PASS"
         label = "回測通過"
-        should_use = True
-        caution = "可作為換匯時間參考，但仍只能用機率與風險管理角度使用。"
+        should_use = False
+        caution = "僅為市場收盤價研究回測；尚缺歷史銀行賣出價、費用與真實發布時間驗證，不能據此啟用實際選時。"
     elif summary.savings_vs_fixed_day_twd > 0:
         verdict = "MIXED"
         label = "結果分歧"
         should_use = False
-        caution = "平均成本有改善，但風險指標未同步改善，暫時只能當提醒，不能宣稱策略已勝出。"
+        caution = "平均成本有改善，但風險或區塊不確定區間尚未通過，不能宣稱策略已勝出。"
     else:
         verdict = "FAIL"
         label = "尚未通過"
@@ -262,7 +282,7 @@ def build_strategy_report(comparisons: list[StrategyComparison], target_usd: flo
         label_zh=label,
         should_use_for_timing=should_use,
         key_findings_zh=findings,
-        caution_zh=caution,
+        caution_zh=caution + " 此回測未計銀行價差與手續費，採完整月份獨立預算，訊號後下一筆市場收盤價成交，日曆 1／8／15／22 日分批。",
     )
 
 
@@ -271,29 +291,41 @@ def _fixed(window: pd.DataFrame, target_usd: float) -> float:
 
 
 def _tranches(window: pd.DataFrame, target_usd: float, tranches: int = 4) -> float:
-    positions = [round(i * (len(window) - 1) / (tranches - 1)) for i in range(tranches)]
-    selected = window.iloc[positions]
-    return float((selected["USDTWD_CLOSE"] * (target_usd / tranches)).sum())
+    if tranches < 1:
+        raise ValueError("tranches must be positive")
+    # Calendar days, fixed before seeing the month's trading-day count.
+    planned_days = [1] if tranches == 1 else [1 + round(21 * i / (tranches - 1)) for i in range(tranches)]
+    costs = []
+    for day in planned_days:
+        eligible = window[window["date"].dt.day >= day]
+        if eligible.empty:
+            raise ValueError("Incomplete month: scheduled tranche has no executable quote")
+        costs.append(float(eligible.iloc[0]["USDTWD_CLOSE"]) * target_usd / tranches)
+    return sum(costs)
 
 
 def _model_timing_once(window: pd.DataFrame, target_usd: float, policy: TimingPolicy | None = None) -> float:
     policy = policy or _default_timing_policy()
-    deadline_buffer_days = int(policy.deadline_buffer_days)
-    risk_probability = float(policy.risk_probability_up_min)
-    opportunity_min = float(policy.opportunity_score_min)
-    favorable_probability_max = float(policy.favorable_probability_up_max)
-    fallback = window.tail(max(1, deadline_buffer_days + 1)).head(1).iloc[0]
-    for idx, row in window.reset_index(drop=True).iterrows():
-        days_left = len(window) - idx - 1
-        if days_left <= deadline_buffer_days:
+    window = window.sort_values("date").reset_index(drop=True)
+    month = window.iloc[0]["date"].tz_localize(None).to_period("M")
+    cutoff = month.end_time.tz_localize("UTC").normalize() - pd.Timedelta(days=policy.deadline_buffer_days)
+    # Pre-scheduled funding rolls BACK before a holiday, using the supplied
+    # official trading-date calendar, never a price-dependent index fraction.
+    dates_before = window.loc[window["date"] <= cutoff, "date"]
+    if dates_before.empty:
+        raise ValueError("No trading date before funding cutoff")
+    cutoff = dates_before.max()
+    for idx, row in window.iterrows():
+        if row["date"] >= cutoff:
             return float(row["USDTWD_CLOSE"] * target_usd)
         prob_up = float(row.get("prob_up", 0.5))
         opportunity = float(row.get("opportunity_score", 0))
-        if prob_up >= risk_probability:
-            return float(row["USDTWD_CLOSE"] * target_usd)
-        if opportunity >= opportunity_min and prob_up <= favorable_probability_max:
-            return float(row["USDTWD_CLOSE"] * target_usd)
-    return float(fallback["USDTWD_CLOSE"] * target_usd)
+        if prob_up >= policy.risk_probability_up_min or (
+            opportunity >= policy.opportunity_score_min and prob_up <= policy.favorable_probability_up_max
+        ):
+            if idx + 1 < len(window):
+                return float(window.iloc[idx + 1]["USDTWD_CLOSE"] * target_usd)
+    raise ValueError("Incomplete month: deadline has no executable quote")
 
 
 def _risk_based(window: pd.DataFrame, target_usd: float) -> float:
@@ -358,17 +390,17 @@ def _candidate_policies() -> list[TimingPolicy]:
     ]
 
 
-def _select_policy(train: pd.DataFrame, target_usd: float) -> tuple[TimingPolicy, float, int]:
+def _select_policy(train: pd.DataFrame, target_usd: float, completed_before=None) -> tuple[TimingPolicy, float, int]:
     best_policy = _default_timing_policy()
     best_score = float("-inf")
     best_payments = 0
     for policy in _candidate_policies():
-        comparisons = _compare_from_predictions(train, target_usd, policy)
+        comparisons = _compare_from_predictions(train, target_usd, policy, completed_before, include_uncertainty=False)
         summary = summarize_strategy_comparison(comparisons)
         if summary is None:
             continue
         payments = next((item.payments for item in comparisons if item.strategy == "model_timing_once"), 0)
-        score = _policy_score(summary)
+        score = _policy_score(summary, target_usd)
         if score > best_score:
             best_policy = policy
             best_score = score
@@ -376,9 +408,9 @@ def _select_policy(train: pd.DataFrame, target_usd: float) -> tuple[TimingPolicy
     return best_policy, best_score, best_payments
 
 
-def _policy_score(summary: StrategySummary) -> float:
+def _policy_score(summary: StrategySummary, target_usd: float = 10_000) -> float:
     return (
         summary.savings_vs_fixed_day_twd
-        - max(0.0, summary.worst_rate_difference) * 10_000
-        - max(0.0, summary.volatility_difference) * 5_000
+        - max(0.0, summary.worst_rate_difference) * target_usd
+        - max(0.0, summary.volatility_difference) * target_usd * 0.5
     )

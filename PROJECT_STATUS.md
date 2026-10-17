@@ -1,5 +1,17 @@
 # Project Status
 
+Production rollout, 2026-10-17 UTC: [durable validation operations](docs/PRODUCTION_VALIDATION_2026-10-17.md). Latest deployment `21cac22a-1df1-4f34-9f87-e439efdad163` reached SUCCESS; 155 tests pass both locally and in the deployed Linux/CPU runtime. All 21 ingestion items succeed after correcting FRED headers, split ZIP members, and TWSE non-trading dates. PostgreSQL additive migrations applied, model evidence uses a persistent volume, and one sequential daily pipeline is scheduled at 22:30 UTC. LINE_REPORT_ENABLED=false. A real redeploy preserved all initial snapshots and archived files.
+
+[Production prediction timestamp audit](docs/PRODUCTION_PREDICTION_AUDIT_2026-10-17.md): of 138 v1 rows, 60 fail basic official-calendar/creation-time checks; the other 78 pass only a necessary timestamp check. None has explicit issuance evidence. Legacy rows are retained and do not certify model skill. Older entries below describe earlier local-only stages.
+
+Final live verification: the five-step no-message pipeline completed successfully at 06:49:34 UTC. Current protocol `992c4840…` has 3 pending forecasts and 0 matured; 3 earlier-protocol snapshots remain separate. All six evidence sets and immutable archives verify. A collector rerun adds 0 snapshots, reports 3 duplicates, and records 0 outcomes. All four operational endpoints return 200; model advice remains unavailable. Daily scheduler next runs at 22:30 UTC; future scheduled execution and forecast maturity remain to be observed.
+
+Latest operational addition: [prospective validation ledger](docs/FORWARD_VALIDATION_2026-10-16.md). Initial current-protocol snapshot count is 3, pending 3, matured 0. Additive migration 20261016_0002 applied locally. 139 tests pass. New pipeline step is prepared; no scheduler was started and no remote deployment or LINE send was performed.
+
+Latest: [Official data and quantitative corrections, 2026-10-16](docs/QUANT_REVIEW_2026-10-16.md). Active v3 uses the CBC daily archive, verified Hua Nan quotes, documented H.10 release alignment, probability baselines, immutable forecasts, and block-interval gates. 128 tests pass. Current strategy is MIXED, model timing is disabled, and remote production has not been changed. Earlier notes below are historical.
+
+Latest audit: [2026-10-16 engineering and quantitative review](docs/AUDIT_2026-10-16.md). The snapshots below are historical and superseded by v2 results. Local data and all three models were rebuilt; model timing remains unverified and disabled by the advice guard. Remote production was not changed during this audit.
+
 Last verified: 2026-08-29 America/Los_Angeles.
 
 Latest committed baseline before this audit: `e5e51f7 Update verified project status`.

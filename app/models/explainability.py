@@ -38,6 +38,8 @@ def explain_latest_prediction(horizon: str, feature_row: pd.Series, top_n: int =
 
 def _logistic_contributions(artifact: dict[str, Any], frame: pd.DataFrame, columns: list[str]) -> list[FeatureContribution]:
     model = artifact["classifiers"].get("logistic")
+    if artifact.get("classification_weights", {}).get("logistic", 1.0) <= 0:
+        return []
     if model is None:
         return []
     try:
@@ -60,6 +62,8 @@ def _logistic_contributions(artifact: dict[str, Any], frame: pd.DataFrame, colum
 
 def _xgboost_contributions(artifact: dict[str, Any], columns: list[str]) -> list[FeatureContribution]:
     model = artifact["classifiers"].get("xgboost")
+    if artifact.get("classification_weights", {}).get("xgboost", 1.0) <= 0:
+        return []
     if model is None:
         return []
     try:

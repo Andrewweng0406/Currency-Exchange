@@ -11,7 +11,8 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from app.ai.openai_interpreter import interpret_risk_context, persist_ai_interpretation
 from app.backtesting.dataset import load_feature_frame
 from app.config import settings
-from app.database.schema import BankRate, Prediction
+from app.ops.bank_quotes import latest_bank_quote
+from app.database.schema import Prediction
 from app.database.session import make_session
 from app.economic_events.importer import upcoming_event_risk
 from app.risk.scoring import latest_risk_snapshot
@@ -24,7 +25,8 @@ def main() -> None:
     latest = features.iloc[-1]
     risk = latest_risk_snapshot(session)
     predictions = _predictions(session)
-    bank = session.execute(select(BankRate.spot_selling).order_by(BankRate.observed_at_utc.desc()).limit(1)).scalar_one_or_none()
+    bank_quote = latest_bank_quote(session)
+    bank = bank_quote.spot_selling if bank_quote else None
     result = interpret_risk_context(
         risk,
         predictions,
@@ -44,7 +46,7 @@ def main() -> None:
 
 def _predictions(session) -> dict[str, dict[str, float | None]]:
     rows = session.execute(
-        select(Prediction).where(Prediction.model_version == "phase4_ensemble_v1").order_by(Prediction.observed_at_utc.desc())
+        select(Prediction).where(Prediction.model_version == "phase4_ensemble_v3").order_by(Prediction.observed_at_utc.desc())
     ).scalars().all()
     out = {}
     for row in rows:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from functools import lru_cache
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -14,6 +15,7 @@ def normalize_database_url(database_url: str) -> str:
     return database_url
 
 
+@lru_cache(maxsize=8)
 def make_engine(database_url: str):
     if database_url.startswith("sqlite:///"):
         db_path = database_url.removeprefix("sqlite:///")
@@ -27,9 +29,14 @@ def make_engine(database_url: str):
     return create_engine(database_url, future=True)
 
 
-def make_session(database_url: str) -> Session:
+@lru_cache(maxsize=8)
+def _session_factory(database_url: str):
     engine = make_engine(database_url)
     from app.database.schema import Base
 
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, future=True)()
+    return sessionmaker(bind=engine, future=True)
+
+
+def make_session(database_url: str) -> Session:
+    return _session_factory(database_url)()

@@ -16,7 +16,7 @@ class BacktestDataset:
     horizons: tuple[int, ...]
 
 
-def load_feature_frame(session: Session, feature_set: str = "daily_v1") -> pd.DataFrame:
+def load_feature_frame(session: Session, feature_set: str = "daily_v3") -> pd.DataFrame:
     rows = session.execute(
         select(Feature.observed_at_utc, Feature.values_json)
         .where(Feature.feature_set == feature_set)
@@ -42,12 +42,13 @@ def add_forward_targets(frame: pd.DataFrame, horizons: tuple[int, ...] = (1, 5, 
     close = pd.to_numeric(output["USDTWD_CLOSE"], errors="coerce")
     for horizon in horizons:
         future_return = close.shift(-horizon) / close - 1
+        output[f"TARGET_END_{horizon}D"] = output["date"].shift(-horizon)
         output[f"TARGET_RETURN_{horizon}D"] = future_return
-        output[f"TARGET_UP_{horizon}D"] = (future_return > 0).astype("Int64")
-        output[f"TARGET_SHOCK_UP_0_5PCT_{horizon}D"] = (future_return > 0.005).astype("Int64")
-        output[f"TARGET_SHOCK_UP_1PCT_{horizon}D"] = (future_return > 0.01).astype("Int64")
-        output[f"TARGET_SHOCK_UP_1_5PCT_{horizon}D"] = (future_return > 0.015).astype("Int64")
-        output[f"TARGET_SHOCK_UP_2PCT_{horizon}D"] = (future_return > 0.02).astype("Int64")
+        output[f"TARGET_UP_{horizon}D"] = (future_return > 0).astype("Int64").where(future_return.notna())
+        output[f"TARGET_SHOCK_UP_0_5PCT_{horizon}D"] = (future_return > 0.005).astype("Int64").where(future_return.notna())
+        output[f"TARGET_SHOCK_UP_1PCT_{horizon}D"] = (future_return > 0.01).astype("Int64").where(future_return.notna())
+        output[f"TARGET_SHOCK_UP_1_5PCT_{horizon}D"] = (future_return > 0.015).astype("Int64").where(future_return.notna())
+        output[f"TARGET_SHOCK_UP_2PCT_{horizon}D"] = (future_return > 0.02).astype("Int64").where(future_return.notna())
     return BacktestDataset(frame=output, horizons=horizons)
 
 

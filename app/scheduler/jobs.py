@@ -27,6 +27,7 @@ DAILY_PIPELINE: tuple[PipelineStep, ...] = (
     PipelineStep("ingestion", "ingest_phase1.py"),
     PipelineStep("features", "build_features.py"),
     PipelineStep("models", "train_models.py", ("--horizon", "all")),
+    PipelineStep("forward_validation", "run_forward_validation.py"),
     PipelineStep("model_health", "evaluate_model_health.py"),
     PipelineStep("line_report", "send_line_report.py", ("--send",)),
 )
@@ -38,15 +39,21 @@ def run_script(script: str, *args: str) -> int:
     log = structlog.get_logger()
     command = [sys.executable, str(ROOT / "scripts" / script), *args]
     log.info("scheduled_script_started", script=script, args=list(args))
-    completed = subprocess.run(command, cwd=ROOT, check=False)
+    try:
+        completed = subprocess.run(command, cwd=ROOT, check=False, timeout=1800)
+    except subprocess.TimeoutExpired:
+        log.error("scheduled_script_timeout", script=script, timeout_seconds=1800)
+        return 124
     log.info("scheduled_script_finished", script=script, returncode=completed.returncode)
     return completed.returncode
 
 
-def run_daily_pipeline(steps: Iterable[PipelineStep] = DAILY_PIPELINE, continue_on_failure: bool = True) -> dict:
+def run_daily_pipeline(steps: Iterable[PipelineStep] | None = None, continue_on_failure: bool = False) -> dict:
     configure_logging()
     log = structlog.get_logger()
     results = []
+    if steps is None:
+        steps = [step for step in DAILY_PIPELINE if step.name != "line_report" or _line_report_enabled()]
     log.info("daily_pipeline_started")
     for step in steps:
         returncode = run_script(step.script, *step.args)
@@ -67,19 +74,12 @@ def start_background_scheduler() -> BackgroundScheduler | None:
 
     configure_logging()
     scheduler = BackgroundScheduler(timezone="UTC")
-    scheduler.add_job(lambda: run_script("ingest_phase1.py"), "cron", hour=22, minute=30, id="daily_ingestion", coalesce=True, max_instances=1)
-    scheduler.add_job(lambda: run_script("build_features.py"), "cron", hour=22, minute=45, id="daily_features", coalesce=True, max_instances=1)
+    # Run dependencies sequentially; wall-clock offsets do not ensure completion.
     scheduler.add_job(
-        lambda: run_script("train_models.py", "--horizon", "all"),
-        "cron",
-        hour=23,
-        minute=0,
-        id="daily_models",
-        coalesce=True,
-        max_instances=1,
+        lambda: run_daily_pipeline(continue_on_failure=False),
+        "cron", hour=22, minute=30, id="daily_pipeline",
+        coalesce=True, max_instances=1,
     )
-    scheduler.add_job(lambda: run_script("evaluate_model_health.py"), "cron", hour=23, minute=20, id="model_health", coalesce=True, max_instances=1)
-    scheduler.add_job(lambda: run_script("send_line_report.py", "--send"), "cron", hour=23, minute=30, id="line_report", coalesce=True, max_instances=1)
     scheduler.start()
     _scheduler = scheduler
     structlog.get_logger().info("background_scheduler_started", jobs=[job.id for job in scheduler.get_jobs()])
@@ -115,3 +115,7 @@ def _scheduler_enabled() -> bool:
     cfg = settings().get("scheduler", {})
     value = os.getenv("SCHEDULER_ENABLED", str(cfg.get("enabled", "false")))
     return str(value).lower() in {"1", "true", "yes", "on"}
+
+
+def _line_report_enabled() -> bool:
+    return os.getenv("LINE_REPORT_ENABLED", "false").lower() in {"1", "true", "yes", "on"}

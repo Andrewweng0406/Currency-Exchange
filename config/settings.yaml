@@ -56,3 +56,4 @@ scheduler:
 
 features:
   max_market_stale_days: 7
+  fx_source_policy: official_only

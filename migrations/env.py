@@ -11,6 +11,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.config import settings
 from app.database.schema import Base
+from app.database.session import normalize_database_url
 
 config = context.config
 
@@ -21,7 +22,7 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
-    return settings()["database"]["url"]
+    return normalize_database_url(settings()["database"]["url"])
 
 
 def run_migrations_offline() -> None:

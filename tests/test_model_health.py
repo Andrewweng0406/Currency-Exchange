@@ -24,7 +24,7 @@ def test_model_health_summary_groups_latest_metrics():
         ModelPerformance(
             observed_at_utc=now,
             source="model_monitoring",
-            model_version="phase4_ensemble_v1",
+            model_version="phase4_ensemble_v3",
             horizon="5d",
             metric="sample_count",
             value=30,
@@ -33,7 +33,7 @@ def test_model_health_summary_groups_latest_metrics():
         ModelPerformance(
             observed_at_utc=now,
             source="model_monitoring",
-            model_version="phase4_ensemble_v1",
+            model_version="phase4_ensemble_v3",
             horizon="5d",
             metric="accuracy",
             value=0.62,
@@ -42,7 +42,7 @@ def test_model_health_summary_groups_latest_metrics():
         ModelPerformance(
             observed_at_utc=now,
             source="model_monitoring",
-            model_version="phase4_ensemble_v1",
+            model_version="phase4_ensemble_v3",
             horizon="5d",
             metric="brier_score",
             value=0.22,
@@ -51,7 +51,7 @@ def test_model_health_summary_groups_latest_metrics():
         ModelPerformance(
             observed_at_utc=now,
             source="model_monitoring",
-            model_version="phase4_ensemble_v1",
+            model_version="phase4_ensemble_v3",
             horizon="5d",
             metric="twd_depreciation_recall",
             value=0.67,
@@ -62,7 +62,7 @@ def test_model_health_summary_groups_latest_metrics():
         session.add_all(rows)
         session.commit()
         summary = latest_model_health_summary(session)
-    assert summary.status == "OK"
+    assert summary.status == "INSUFFICIENT_HISTORY"
     assert summary.metrics[0].horizon == "5d"
     assert summary.metrics[0].window == "30D"
     assert summary.metrics[0].sample_count == 30

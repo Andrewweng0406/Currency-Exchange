@@ -13,12 +13,14 @@ from app.alerts.engine import generate_alerts, persist_alert, should_send_alert
 from app.ai.openai_interpreter import interpret_risk_context, persist_ai_interpretation
 from app.backtesting.dataset import load_feature_frame
 from app.config import settings
-from app.database.schema import BankRate, Prediction
+from app.database.schema import Prediction
 from app.database.session import make_session
 from app.exchange.planner import default_inputs, recommend_exchange
 from app.economic_events.importer import upcoming_event_risk
 from app.line.client import LineMessagingClient
 from app.line.formatter import daily_report
+from app.ops.advice import guard_model_advice
+from app.ops.bank_quotes import latest_bank_quote
 from app.ops.data_quality import data_coverage_report, summarize_data_quality
 from app.risk.scoring import latest_risk_snapshot
 
@@ -33,8 +35,9 @@ def main() -> None:
     exchange = recommend_exchange(inputs, risk.twd_risk_score, risk.opportunity_score)
     predictions = _predictions(session)
     upcoming = upcoming_event_risk(session)
-    data_quality = summarize_data_quality(data_coverage_report(session))
-    bank = session.execute(select(BankRate.spot_selling).order_by(BankRate.observed_at_utc.desc()).limit(1)).scalar_one_or_none()
+    data_quality = guard_model_advice(session, summarize_data_quality(data_coverage_report(session)))
+    bank_quote = latest_bank_quote(session)
+    bank = bank_quote.spot_selling if bank_quote else None
     ai = interpret_risk_context(
         risk,
         predictions,
@@ -60,6 +63,8 @@ def main() -> None:
         ai_interpretation=ai,
         data_quality=data_quality,
         market_snapshot=latest.to_dict(),
+        bank_name=bank_quote.bank_name if bank_quote else None,
+        bank_observed_at_utc=str(bank_quote.observed_at_utc) + " UTC" if bank_quote else None,
     )
     alerts = [
         candidate
@@ -80,7 +85,7 @@ def main() -> None:
 
 def _predictions(session) -> dict[str, dict[str, float | None]]:
     rows = session.execute(
-        select(Prediction).where(Prediction.model_version == "phase4_ensemble_v1").order_by(Prediction.observed_at_utc.desc())
+        select(Prediction).where(Prediction.model_version == "phase4_ensemble_v3").order_by(Prediction.observed_at_utc.desc())
     ).scalars().all()
     out = {}
     for row in rows:

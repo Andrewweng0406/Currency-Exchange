@@ -23,7 +23,7 @@ def test_data_quality_checks_feature_missing_ratio():
             Feature(
                 observed_at_utc=datetime.now(timezone.utc),
                 source="test",
-                feature_set="daily_v1",
+                feature_set="daily_v3",
                 values_json='{"USDTWD_CLOSE": 31.0, "DATA_COMPLETENESS": 1.0}',
             )
         )

@@ -32,6 +32,8 @@ def horizon_feature_importance(horizon: str, top_n: int = 12) -> list[Importance
 
 def _xgboost_gain_importance(artifact: dict[str, Any], columns: list[str]) -> list[ImportanceItem]:
     model = artifact["classifiers"].get("xgboost")
+    if artifact.get("classification_weights", {}).get("xgboost", 1.0) <= 0:
+        return []
     if model is None:
         return []
     try:
@@ -48,6 +50,8 @@ def _xgboost_gain_importance(artifact: dict[str, Any], columns: list[str]) -> li
 
 def _logistic_abs_coef_importance(artifact: dict[str, Any], columns: list[str]) -> list[ImportanceItem]:
     model = artifact["classifiers"].get("logistic")
+    if artifact.get("classification_weights", {}).get("logistic", 1.0) <= 0:
+        return []
     if model is None:
         return []
     try:

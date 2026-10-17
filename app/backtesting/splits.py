@@ -20,6 +20,7 @@ def yearly_expanding_splits(
     date_col: str = "date",
     min_train_years: int = 5,
     test_years: int = 1,
+    label_end_col: str | None = None,
 ) -> list[WalkForwardSplit]:
     if frame.empty:
         return []
@@ -35,7 +36,13 @@ def yearly_expanding_splits(
         test_mask = dates.dt.year.isin(test_year_group)
         if not test_mask.any():
             continue
+        # Labels must have matured strictly before the first test observation.
+        if label_end_col is not None:
+            label_end = pd.to_datetime(frame[label_end_col], utc=True)
+            train_mask &= label_end < dates[test_mask].min()
         train_idx = frame.index[train_mask].tolist()
+        if not train_idx:
+            continue
         test_idx = frame.index[test_mask].tolist()
         splits.append(
             WalkForwardSplit(

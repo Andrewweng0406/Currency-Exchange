@@ -18,13 +18,19 @@ def daily_report(
     ai_interpretation: object | None = None,
     data_quality: DataQualitySummary | None = None,
     market_snapshot: dict | None = None,
+    bank_name: str | None = None,
+    bank_observed_at_utc: str | None = None,
 ) -> str:
     _ = ai_interpretation
     pred_lines = [
-        _simple_prediction_line("1天", predictions.get("1d", {})),
-        _simple_prediction_line("5天", predictions.get("5d", {})),
-        _simple_prediction_line("20天", predictions.get("20d", {})),
+        _simple_prediction_line("1個交易日", predictions.get("1d", {})),
+        _simple_prediction_line("5個交易日", predictions.get("5d", {})),
+        _simple_prediction_line("20個交易日", predictions.get("20d", {})),
     ]
+    if data_quality and data_quality.blocks_model_advice:
+        pred_lines = ["模型尚未通過資料或追蹤驗證，暫停方向機率與選時建議。"]
+    bank_context = f"（{bank_name}）" if bank_name else ""
+    bank_time = f"銀行報價時間：{bank_observed_at_utc}\n" if bank_observed_at_utc else ""
     reason_lines = family_reason_lines(market_snapshot) if market_snapshot else _simple_reason_lines(risk.contributors)
     timing_action = _simple_timing_action(exchange.action, data_quality)
     timing_reason = _simple_timing_reason(exchange.action, predictions, risk, changes, reason_lines, data_quality)
@@ -32,15 +38,16 @@ def daily_report(
     _ = exchange_inputs
     return (
         "🇹🇼 美元換匯提醒\n\n"
-        f"目前匯率：{current_usdtwd:.3f}\n"
-        f"銀行美元賣出價：{_num(bank_spot_selling)}\n"
-        f"近5天變化：{_signed_pct(changes.get('5d'))}\n\n"
+        f"市場收盤匯率：{current_usdtwd:.3f}（{risk.timestamp_utc[:10]}）\n"
+        f"銀行美元賣出價：{_num(bank_spot_selling)}{bank_context}\n"
+        f"{bank_time}"
+        f"近5個交易日變化：{_signed_pct(changes.get('5d'))}\n\n"
         "━━━━━━━━━━\n\n"
         "未來方向\n"
         + "\n".join(pred_lines)
         + "\n\n━━━━━━━━━━\n\n"
         f"台幣風險：{risk.twd_risk_score}/100（{_simple_risk_label(risk.twd_risk_score)}）\n"
-        f"信心：{_pct(risk.confidence)}\n\n"
+        f"資料與模型一致度：{_pct(risk.confidence)}（非準確率）\n\n"
         f"{_data_quality_line(data_quality)}\n\n"
         "━━━━━━━━━━\n\n"
         "主要判斷依據\n"
@@ -91,8 +98,8 @@ def _simple_prediction_line(label: str, item: dict[str, float | None]) -> str:
     prob_down = item.get("prob_down")
     if prob_up is None or prob_down is None:
         return f"{label}：資料不足"
-    direction = "美元偏漲" if prob_up > prob_down else "美元偏跌" if prob_down > prob_up else "方向中性"
-    return f"{label}：{direction}（漲{_pct(prob_up)} / 跌{_pct(prob_down)}）"
+    direction = "美元偏漲" if prob_up > prob_down else "美元偏跌或持平" if prob_down > prob_up else "方向中性"
+    return f"{label}：{direction}（漲{_pct(prob_up)} / 跌或持平{_pct(prob_down)}）"
 
 
 def _simple_reason_lines(contributors: list[dict]) -> list[str]:
@@ -112,9 +119,9 @@ def _simple_reason_line(item: dict) -> str:
     value = _as_float(item.get("value"))
 
     if name in {"prediction_5d", "prediction 5d"}:
-        return f"• 模型預測：{_pressure_text(value, '未來5天美元上漲壓力偏低', '未來5天美元上漲壓力偏高')}"
+        return f"• 模型預測：{_pressure_text(value, '未來5個交易日美元上漲壓力偏低', '未來5個交易日美元上漲壓力偏高')}"
     if name in {"prediction_20d", "prediction 20d"}:
-        return f"• 中期預測：{_pressure_text(value, '未來20天美元上漲壓力偏低', '未來20天美元上漲壓力偏高')}"
+        return f"• 中期預測：{_pressure_text(value, '未來20個交易日美元上漲壓力偏低', '未來20個交易日美元上漲壓力偏高')}"
     if "usdtwd" in name and "momentum" in name:
         return f"• 近期匯率走勢：{_pressure_text(value, '美元最近偏弱', '美元最近偏強')}"
     if "dxy" in name:
@@ -158,7 +165,7 @@ def _data_quality_line(data_quality: DataQualitySummary | None) -> str:
 
 def _simple_timing_action(action: str, data_quality: DataQualitySummary | None = None) -> str:
     if data_quality and data_quality.blocks_model_advice:
-        return "今天資料不完整，先不要只看模型決定。"
+        return "目前暫停模型選時建議，請依實際付款需求安排。"
     labels = {
         "WAIT": "可以再等一下，現在不用急著換。",
         "EXCHANGE_25_PERCENT": "可以開始留意，現在不是太差的換匯時間。",
@@ -189,14 +196,14 @@ def _simple_timing_reason(
 
     if action == "WAIT":
         if prob_down is not None and prob_down >= 0.55:
-            return f"模型偏向美元短期走弱，5天美元下跌機率約{_pct(prob_down)}；{main_reason}。"
+            return f"模型偏向美元短期走弱，5個交易日美元下跌機率約{_pct(prob_down)}；{main_reason}。"
         if risk.twd_risk_score <= 40:
             return f"台幣風險分數偏低，目前沒有明顯美元急漲壓力；{main_reason}。"
         return f"目前訊號不夠強，適合先觀望；{main_reason}。"
 
     if action in {"EXCHANGE_25_PERCENT", "EXCHANGE_50_PERCENT"}:
         if prob_up is not None and prob_up >= 0.55:
-            return f"模型偏向美元短期走強，5天美元上漲機率約{_pct(prob_up)}；{main_reason}。"
+            return f"模型偏向美元短期走強，5個交易日美元上漲機率約{_pct(prob_up)}；{main_reason}。"
         if change_5d is not None and change_5d > 0:
             return f"近期美元已有上漲跡象，等太久可能遇到更貴匯率；{main_reason}。"
         if risk.twd_risk_score <= 40:

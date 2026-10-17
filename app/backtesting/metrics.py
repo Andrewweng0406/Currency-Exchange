@@ -42,7 +42,7 @@ def classification_metrics(y_true: pd.Series, prob_up: pd.Series, threshold: flo
     fn = int(((pred == 0) & (y == 1)).sum())
     precision = _safe_div(tp, tp + fp)
     recall = _safe_div(tp, tp + fn)
-    f1 = _safe_div(2 * precision * recall, precision + recall) if not math.isnan(precision + recall) else math.nan
+    f1 = _safe_div(2 * tp, 2 * tp + fp + fn)
     return ClassificationMetrics(
         accuracy=_safe_div(tp + tn, len(y)),
         precision=precision,

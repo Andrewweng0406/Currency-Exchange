@@ -12,11 +12,16 @@ from app.backtesting.metrics import classification_metrics
 def walk_forward_probabilities(session, horizon: str = "5d", min_train_years: int = 5) -> pd.DataFrame:
     days = HORIZON_DAYS[horizon]
     dataset = add_forward_targets(load_feature_frame(session), horizons=(days,))
+    if dataset.frame.empty:
+        return pd.DataFrame()
     frame = dataset.frame.replace([np.inf, -np.inf], np.nan).dropna(subset=[f"TARGET_UP_{days}D", "USDTWD_CLOSE"]).reset_index(drop=True)
     cols = modeling_columns(frame)
-    splits = yearly_expanding_splits(frame, min_train_years=min_train_years)
+    splits = yearly_expanding_splits(
+        frame, min_train_years=min_train_years,
+        label_end_col=f"TARGET_END_{HORIZON_DAYS[horizon]}D",
+    )
     results = []
-    prior_weights = None
+    prior_validation = {}
     for split in splits:
         train = frame.loc[split.train_index]
         test = frame.loc[split.test_index]
@@ -26,10 +31,16 @@ def walk_forward_probabilities(session, horizon: str = "5d", min_train_years: in
         for name, model in models.items():
             model.fit(train[cols], train[f"TARGET_UP_{days}D"].astype(int))
             model_probs[name] = model.predict_proba(test[cols])[:, 1]
-        if prior_weights is None:
-            weights = {name: 1 / len(models) for name in models}
+        prior_scores = {}
+        for name, parts in prior_validation.items():
+            known = pd.concat(parts, ignore_index=True)
+            known = known[known["label_end"] < test["date"].min()]
+            if not known.empty:
+                prior_scores[name] = classification_metrics(known["y"], known["prob"])
+        if not prior_scores:
+            weights = {name: float(name == "coin_flip") for name in models}
         else:
-            weights = prior_weights
+            weights = _weights_from_scores(prior_scores)
         ensemble = sum(model_probs[name] * weights[name] for name in models)
         part = pd.DataFrame(
             {
@@ -43,6 +54,9 @@ def walk_forward_probabilities(session, horizon: str = "5d", min_train_years: in
         for name, values in model_probs.items():
             part[f"prob_{name}"] = values
         results.append(part)
-        prior_scores = {name: classification_metrics(test[f"TARGET_UP_{days}D"], pd.Series(values)) for name, values in model_probs.items()}
-        prior_weights = _weights_from_scores(prior_scores)
+        for name, values in model_probs.items():
+            prior_validation.setdefault(name, []).append(pd.DataFrame({
+                "label_end": test[f"TARGET_END_{days}D"].to_numpy(),
+                "y": test[f"TARGET_UP_{days}D"].to_numpy(), "prob": values,
+            }))
     return pd.concat(results, ignore_index=True) if results else pd.DataFrame()

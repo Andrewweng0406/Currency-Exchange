@@ -28,6 +28,7 @@ def test_daily_pipeline_records_failures_but_continues(monkeypatch):
 
     monkeypatch.setattr("app.scheduler.jobs.run_script", fake_run_script)
     result = run_daily_pipeline(
+        continue_on_failure=True,
         steps=[
             PipelineStep("ingestion", "ingest_phase1.py"),
             PipelineStep("line_report", "send_line_report.py", ("--send",)),
@@ -39,10 +40,44 @@ def test_daily_pipeline_records_failures_but_continues(monkeypatch):
 
 
 def test_default_daily_pipeline_ends_with_line_report():
-    assert [step.name for step in DAILY_PIPELINE] == ["ingestion", "features", "models", "model_health", "line_report"]
+    assert [step.name for step in DAILY_PIPELINE] == ["ingestion", "features", "models", "forward_validation", "model_health", "line_report"]
     assert DAILY_PIPELINE[-1].args == ("--send",)
 
 
 def test_scheduler_status_disabled(monkeypatch):
     monkeypatch.setenv("SCHEDULER_ENABLED", "false")
     assert scheduler_status() == {"enabled": False, "running": False, "jobs": []}
+
+
+def test_pipeline_stops_dependent_steps_after_failure(monkeypatch):
+    calls = []
+    def fail(script, *args):
+        calls.append(script)
+        return 2
+    monkeypatch.setattr("app.scheduler.jobs.run_script", fail)
+    result = run_daily_pipeline(continue_on_failure=False)
+    assert not result["ok"]
+    assert calls == ["ingest_phase1.py"]
+
+
+def test_notifications_require_explicit_enablement(monkeypatch):
+    calls = []
+    monkeypatch.delenv("LINE_REPORT_ENABLED", raising=False)
+    monkeypatch.setattr("app.scheduler.jobs.run_script", lambda script, *args: calls.append(script) or 0)
+    assert run_daily_pipeline()["ok"]
+    assert "run_forward_validation.py" in calls
+    assert "send_line_report.py" not in calls
+    calls.clear()
+    monkeypatch.setenv("LINE_REPORT_ENABLED", "true")
+    assert run_daily_pipeline()["ok"]
+    assert calls[-1] == "send_line_report.py"
+
+
+def test_timeout_returns_failure_instead_of_hanging_scheduler(monkeypatch):
+    import subprocess
+    from app.scheduler.jobs import run_script
+    def expire(*args, **kwargs):
+        assert kwargs["timeout"] == 1800
+        raise subprocess.TimeoutExpired(args[0], 1800)
+    monkeypatch.setattr("app.scheduler.jobs.subprocess.run", expire)
+    assert run_script("ingest_phase1.py") == 124

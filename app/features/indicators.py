@@ -4,19 +4,21 @@ import pandas as pd
 
 
 def pct_return(series: pd.Series, periods: int) -> pd.Series:
-    return series.pct_change(periods=periods)
+    return series.pct_change(periods=periods, fill_method=None)
 
 
 def rolling_volatility(series: pd.Series, window: int) -> pd.Series:
-    return series.pct_change().rolling(window).std()
+    return series.pct_change(fill_method=None).rolling(window).std()
 
 
 def rsi(close: pd.Series, window: int = 14) -> pd.Series:
     delta = close.diff()
     gain = delta.clip(lower=0).rolling(window).mean()
     loss = (-delta.clip(upper=0)).rolling(window).mean()
-    rs = gain / loss.replace(0, pd.NA)
-    return 100 - (100 / (1 + rs))
+    rs = gain / loss.replace(0, float("nan"))
+    result = 100 - (100 / (1 + rs))
+    result = result.mask((loss == 0) & (gain > 0), 100.0)
+    return result.mask((loss == 0) & (gain == 0), 50.0)
 
 
 def atr(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:

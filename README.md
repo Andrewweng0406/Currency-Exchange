@@ -2,13 +2,31 @@
 
 Production-oriented USD/TWD probability forecasting and exchange risk management for a student in the US whose family converts TWD to USD. The project is built around probability, confidence, risk control, auditability, and LINE Messaging API alerts. It does not claim exact future FX prices.
 
+## Prospective Validation
+
+[The prospective validation ledger](docs/FORWARD_VALIDATION_2026-10-16.md) captures complete input/model/quote evidence and freezes first observed outcomes in separate tables. View `GET /forward-validation` or run `python scripts/run_forward_validation.py --status-only`. [Production rollout](docs/PRODUCTION_VALIDATION_2026-10-17.md) now runs the sequential pipeline daily at 22:30 UTC, with PostgreSQL and persistent model/evidence storage. LINE notifications require explicit enablement; prospective collection does not automatically activate model timing.
+
+## 2026-10-16 Official Data And Quantitative Corrections
+
+The [second quantitative review](docs/QUANT_REVIEW_2026-10-16.md) supersedes prior snapshots. The active feature/model versions are `daily_v3` / `phase4_ensemble_v3`: 4,669 official CBC trading dates from 2008, a verified Hua Nan USD spot parser and quote timestamp, release-aware H.10 alignment, explicit 50% and historical-rate baselines, immutable first forecasts, and baseline-relative live monitoring. Historical v1/v2 records remain for audit.
+
+A corrected monthly comparison has approximately NT$268 mean savings per USD 10,000, but the block interval spans -NT$877 to +NT$1,401. Its verdict is `MIXED`, not `PASS`, and model timing remains disabled. Research sigmoid calibration has not been promoted. No remote deployment or LINE send was performed during the review.
+
+Reproduce the read-only diagnostic with `python scripts/review_quant_models.py`. Current quote capture/backfill evidence is recorded by `scripts/verify_fx_sources.py`; the one-off local `--apply` path backs up SQLite before writing.
+
+## Earlier 2026-10-16 Audit Update
+
+Earlier v2 engineering findings and numbers are preserved in the [first audit](docs/AUDIT_2026-10-16.md) and [historical analysis](docs/HISTORICAL_ANALYSIS_2026-10-16.md). They are archived research snapshots; the active v3 data, definitions, and results are described above.
+
+For a new read-only historical diagnostic, run `python scripts/analyze_history.py --as-of 2026-10-16 --feature-set daily_v3`. Current CSV/HTML output is separated by date and feature set under `data/analysis/`; it does not overwrite model artifacts or database rows.
+
 ## Current Status
 
 Implemented:
 
 - Data-source audit in `DATA_SOURCES.md`.
 - SQLite local development database with PostgreSQL-ready SQLAlchemy models.
-- Real data ingestion for CBC USD/TWD close, Bank of Taiwan USD spot selling, FRED market/macro series, TWSE foreign flow, TAIEX, 2330, and Yahoo Finance supplemental market series.
+- Real data ingestion for CBC USD/TWD close, Hua Nan USD spot selling (Land Bank fallback), FRED market/macro series, TWSE foreign flow, TAIEX, 2330, and Yahoo Finance supplemental market series.
 - Provider timeout/retry handling and structured JSON logs.
 - Conservative TWSE historical backfill script for TAIEX, 2330, and foreign-flow trading dates.
 - Daily feature engineering pipeline with technical, macro-market, Asia FX, TWSE, TSMC, and data-completeness features.
@@ -127,7 +145,7 @@ The script is resumable: existing foreign-flow dates are skipped.
 python scripts/build_features.py
 ```
 
-The feature set is stored in the `features` table as `daily_v1`. It includes:
+The feature set is stored in the `features` table as `daily_v3`. It includes:
 
 - USD/TWD returns, rolling highs/lows, moving averages, volatility, RSI, ATR, Bollinger position, momentum, and rate of change.
 - DXY/broad USD index returns.
@@ -189,15 +207,18 @@ On Railway, the API process can also start the production scheduler when this se
 
 ```text
 SCHEDULER_ENABLED=true
+LINE_REPORT_ENABLED=false
 ```
 
 With the scheduler enabled, the running API container keeps the LINE webhook alive and also runs the daily jobs in UTC:
 
-- 22:30 UTC: Phase 1 data ingestion.
-- 22:45 UTC: feature build.
-- 23:00 UTC: train/persist 1D, 5D, and 20D models.
-- 23:20 UTC: model health evaluation.
-- 23:30 UTC: send the concise daily LINE report.
+- 22:30 UTC (Taipei 06:30 the following day): ingest, build features, train all horizons, capture/evaluate prospective forecasts, then evaluate model health.
+- Notifications run only when `LINE_REPORT_ENABLED=true`; collection defaults to no messages.
+- A failed step stops dependent steps; no fixed clock interval is assumed to guarantee completion.
+- CBC and bank observations are required. Supplemental provider failures are logged as `DEGRADED`; freshness and advice guards remain active.
+- Run only one scheduler process/replica to avoid duplicate jobs across API workers.
+- Mount persistent storage at `/app/models/artifacts` to retain models and prospective evidence across deploys. PostgreSQL retains the ledger and original history.
+- Container startup applies additive Alembic migrations before serving requests. Each pipeline step has a 30-minute timeout.
 
 Check production scheduler state:
 
@@ -426,7 +447,7 @@ Run scheduler:
 python scripts/run_scheduler.py
 ```
 
-Scheduled jobs use UTC internally and run ingestion, feature building, model training, monitoring, and LINE report sending. In Docker/Railway the scheduler uses the container's current Python executable, so it does not require a local `.venv`.
+Scheduled jobs use UTC internally and run ingestion, feature building, model training, prospective validation, and monitoring in order. LINE sending requires `LINE_REPORT_ENABLED=true`. In Docker/Railway the scheduler uses the container's current Python executable, so it does not require a local `.venv`.
 
 ## Docker
 
@@ -442,7 +463,7 @@ For production, use PostgreSQL and persistent storage. Model artifacts are local
 ## 14. Design Guardrails
 
 - No random train/test split for time-series modeling.
-- No look-ahead bias: macro values must be joined by release timestamp.
+- Point-in-time data remains a requirement: current daily source lags are conservative proxies, not verified release timestamps or historical vintages. See the audit limitations.
 - No fabricated consensus forecasts or Fed probabilities.
 - Poor model performance lowers ensemble weight.
 - Missing provider data lowers confidence.
