@@ -40,6 +40,19 @@ run_id `a5df3e7fc28943848879751b370619b2`，觸發來源為 **manual**。2026-10
 
 預測規則指紋仍為 `992c4840…`，兩組事前紀錄合計仍為六筆，沒有因本輪觀測功能或重跑而增加樣本；當前組三筆皆待到期，指紋異常 0。
 
-本輪首個未來自動排程仍是 2026-10-17 22:30 UTC（洛杉磯 10/17 15:30、台北 10/18 06:30）。此刻尚未實際觸發，不能把本次 manual 執行當成 scheduled 執行證據。
+初次部署驗證時，首個未來自動排程為 2026-10-17 22:30 UTC（台北 10/18 06:30），當時尚未觸發。下節記錄後續真正的 scheduled 執行證據，與本次 manual 執行分開。
 
 最終部署 `f454de3d-65fd-451f-a23b-da2c25bc297f` 已達 SUCCESS。重新部署前後逐一比對 `/pipeline/status` 的完整 JSON，run_id、五步驟結果、開始／完成時間、最後成功紀錄完全相同；狀態仍為 SUCCEEDED、overdue=false。六筆事前紀錄及規則指紋也保留，指紋異常 0。
+
+## 首次自動排程確認（2026-10-18 07:29 UTC 查核）
+
+- run_id：`27832e0c8fbb4745b426c7233fb0af47`，`trigger=scheduled`。
+- 實際開始：2026-10-17 22:30:00.004218 UTC；完成：22:35:07.491769 UTC，約 5 分 7 秒。五個步驟皆回傳 0，`status=SUCCEEDED`、`overdue=false`，`last_success` 指向同一 run。
+- 來源日誌確認 21 項 ingestion 全部成功，`missing_required=[]`、`failed_providers=[]`；處理 96,372 筆 upsert，不代表新增 96,372 筆資料。
+- 唯讀 SQL 確認官方 CBC 最新日期仍為 2026-10-16；華南仍為 1 筆、報價時間 2026-10-16 15:56:15 UTC，土地銀行仍為 52 筆。週末重新取回相同報價不增加觀測日，不能視為新的華南歷史樣本。
+- 當前協定 `992c4840…` 不變；collector 回報 `captured=0`、`duplicates=3`、`missing_horizons=[]`；新增到期結果 0。當前組仍是同一起算日的三種期限，3 筆待到期，完整性錯誤 0；先前組的 3 筆繼續分開保存。
+- 排程仍啟用，下一次為 2026-10-18 22:30 UTC。LINE 通知關閉；`/overview` 維持 `advice_available=false`、`exchange=null`。
+
+此次沒有發現流程故障，不需重跑或重新部署。查核的 API 回應保存在本機 `data/raw/ops/status_20261018.json`，時間範圍受限的正式來源／執行日誌保存在 `scheduled_run_20261017_evidence.json`，均不進 git。
+
+日誌平台將 APScheduler 的一般文字「executed successfully」標成 error；此行與五步驟回傳碼、持久化紀錄及 collector 結果核對後，確認不是流程失敗。後續排障應同時看實際事件及回傳碼，不能只看平台對這行文字的嚴重度標籤。
