@@ -60,7 +60,7 @@ def overview(session=Depends(_session)):
         default_inputs(), risk.twd_risk_score, risk.opportunity_score
     )
     bank = latest_bank_quote(session)
-    predictions = _predictions(session)
+    predictions = _predictions(session, latest["date"])
     return _dataclass_safe({
         "current": {
             "date": str(latest["date"]),
@@ -83,7 +83,7 @@ def overview(session=Depends(_session)):
         "predictions": predictions,
         "family_reasons": _dataclass_safe(family_reasons(latest.to_dict())),
         "upcoming_events": upcoming_event_risk(session),
-        "ai_interpretation": _dataclass_safe(latest_ai_interpretation(session)),
+        "ai_interpretation": _dataclass_safe(_current_ai_interpretation(session, quality, latest["date"])),
     })
 
 
@@ -138,9 +138,12 @@ def strategy_backtest(
 
 @app.get("/ai/latest")
 def ai_latest(session=Depends(_session)):
-    latest = latest_ai_interpretation(session)
+    features = load_feature_frame(session)
+    quality = guard_model_advice(session, summarize_data_quality(data_coverage_report(session)))
+    latest = None if features.empty else _current_ai_interpretation(session, quality, features.iloc[-1]["date"])
     if latest is None:
-        return {"enabled": False, "provider": "openai", "model": None}
+        return {"enabled": False, "provider": "openai", "model": None,
+                "reason": "MODEL_ADVICE_BLOCKED" if quality.blocks_model_advice else "NO_CURRENT_INTERPRETATION"}
     return _dataclass_safe(latest)
 
 
@@ -184,15 +187,39 @@ async def line_webhook(request: Request, x_line_signature: str | None = Header(d
     return {"ok": True, "signature_verified": verified, "user_ids": user_ids}
 
 
-def _predictions(session):
+def _current_ai_interpretation(session, quality, as_of):
+    if quality.blocks_model_advice:
+        return None
+    latest = latest_ai_interpretation(session)
+    if latest is None or latest.observed_at_utc is None:
+        return None
+    observed = pd.to_datetime(latest.observed_at_utc, utc=True)
+    origin = pd.to_datetime(as_of, utc=True).normalize()
+    # An old narrative cannot be presented as an interpretation of a newer close.
+    start = origin + pd.Timedelta(hours=9)
+    deadline = origin + pd.offsets.BDay(1) + pd.Timedelta(hours=9)
+    if not start <= observed < deadline or observed > pd.Timestamp.now(tz="UTC"):
+        return None
+    return latest
+
+
+def _predictions(session, as_of):
     rows = session.execute(
-        select(Prediction).where(Prediction.model_version == "phase4_ensemble_v3").order_by(Prediction.observed_at_utc.desc())
+        select(Prediction).where(Prediction.model_version == "phase4_ensemble_v3",
+                                 Prediction.source == "model_training_latest",
+                                 Prediction.observed_at_utc == pd.to_datetime(as_of, utc=True).to_pydatetime())
+        .order_by(Prediction.id.asc())
     ).scalars().all()
     out = {}
     for row in rows:
+        if row.horizon in out:
+            continue
         out.setdefault(
             row.horizon,
             {
+                "origin_utc": pd.to_datetime(row.observed_at_utc, utc=True).isoformat(),
+                "model_version": row.model_version,
+                "confidence_method": "data_completeness_and_model_agreement_not_accuracy",
                 "prob_up": row.prob_up,
                 "prob_down": row.prob_down,
                 "expected_return": row.expected_return,

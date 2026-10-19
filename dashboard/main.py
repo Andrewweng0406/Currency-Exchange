@@ -45,7 +45,10 @@ with make_session(settings()["database"]["url"]) as session:
     risk = latest_risk_snapshot(session)
     bank = latest_bank_quote(session)
     predictions = session.execute(
-        select(Prediction).where(Prediction.model_version == MODEL_VERSION).order_by(Prediction.observed_at_utc.desc())
+        select(Prediction).where(Prediction.model_version == MODEL_VERSION,
+                                 Prediction.source == "model_training_latest",
+                                 Prediction.observed_at_utc == latest["date"].to_pydatetime())
+        .order_by(Prediction.id.asc())
     ).scalars().all()
     pred_by_horizon = {}
     for pred in predictions:
@@ -60,6 +63,7 @@ with make_session(settings()["database"]["url"]) as session:
     col4.metric("Opportunity", f"{risk.opportunity_score}/100", f"資料與模型一致度 {risk.confidence:.0%}（非準確率）")
 
     st.subheader("Predictions")
+    st.caption("僅顯示上述市場資料日期的預測；N/A 表示該期限尚未建立。機率仍在追蹤驗證中。")
     pred_cols = st.columns(3)
     for idx, horizon in enumerate(["1d", "5d", "20d"]):
         pred = pred_by_horizon.get(horizon)

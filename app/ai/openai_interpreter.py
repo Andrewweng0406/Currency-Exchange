@@ -24,6 +24,7 @@ class AIInterpretationResult:
     summary_zh_tw: str | None = None
     raw_response: str | None = None
     error: str | None = None
+    observed_at_utc: str | None = None
 
 
 def latest_ai_interpretation(session) -> AIInterpretationResult | None:
@@ -40,6 +41,8 @@ def latest_ai_interpretation(session) -> AIInterpretationResult | None:
         confidence_adjustment=float(row.confidence_adjustment or 0),
         summary_zh_tw=row.summary_zh_tw,
         raw_response=row.raw_response,
+        observed_at_utc=(row.observed_at_utc.replace(tzinfo=timezone.utc) if row.observed_at_utc.tzinfo is None
+                         else row.observed_at_utc.astimezone(timezone.utc)).isoformat(),
     )
 
 
