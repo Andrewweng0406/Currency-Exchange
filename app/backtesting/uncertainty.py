@@ -5,11 +5,18 @@ import math
 import numpy as np
 
 
+class InsufficientBlocksError(ValueError):
+    """The sample cannot supply two blocks at the prespecified dependence length."""
+
+
 def block_mean_interval(values, block_size: int, repeats: int = 1000) -> tuple[float, float]:
     values = np.asarray(values, dtype=float)
     if len(values) < 2 or not np.isfinite(values).all() or block_size < 1:
         raise ValueError("A block interval requires at least two finite observations and positive block size")
-    block_size = min(block_size, len(values))
+    if len(values) < 2 * block_size:
+        raise InsufficientBlocksError(
+            f"Need at least {2 * block_size} observations for two blocks of length {block_size}; got {len(values)}"
+        )
     rng = np.random.default_rng(20261016)
     estimates = []
     for _ in range(repeats):

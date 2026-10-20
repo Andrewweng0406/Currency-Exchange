@@ -177,7 +177,7 @@ def _comparisons_from_records(records: dict[str, list[tuple[float, float, float]
         regrets = pd.Series([v[0] - v[1] for v in values])
         fixed_costs = pd.Series([v[2] for v in values])
         ci_low, ci_high = (block_mean_interval(fixed_costs - costs, 3)
-                           if len(values) >= 2 and include_uncertainty else (None, None))
+                           if len(values) >= 6 and include_uncertainty else (None, None))
         comparisons.append(
             StrategyComparison(
                 strategy=name,

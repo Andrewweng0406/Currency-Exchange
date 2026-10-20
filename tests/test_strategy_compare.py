@@ -14,6 +14,20 @@ import pandas as pd
 import pytest
 
 
+def test_few_months_keep_average_savings_but_do_not_claim_a_cost_interval():
+    from app.backtesting.strategy_compare import _comparisons_from_records
+
+    fixed = [(100., 90., 100.)] * 4
+    model = [(90., 90., 100.), (109., 90., 100.)] * 2
+    comparisons = _comparisons_from_records(
+        {"fixed_day_once": fixed, "model_timing_once": model}, target_usd=1,
+    )
+    candidate = next(item for item in comparisons if item.strategy == 'model_timing_once')
+    assert candidate.savings_vs_fixed_day_twd == .5
+    assert candidate.savings_ci_low is None and candidate.savings_ci_high is None
+    assert not summarize_strategy_comparison(comparisons).passed
+
+
 def test_strategy_costs():
     window = pd.DataFrame(
         {

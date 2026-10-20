@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.backtesting.dataset import add_forward_targets, load_feature_frame, modeling_columns
 from app.backtesting.metrics import classification_metrics
 from app.backtesting.splits import yearly_expanding_splits
+from app.backtesting.uncertainty import InsufficientBlocksError, block_mean_interval
 from app.config import ROOT, risk_policy, settings
 from app.database.schema import BankRate, Feature, ForeignFlow, FxPrice, MarketData, Prediction
 from app.database.session import make_engine
@@ -47,14 +48,10 @@ def block_interval(values, block_size=20, repeats=1000):
     values = values[np.isfinite(values)]
     if len(values) < 2:
         return [None, None]
-    rng = np.random.default_rng(20261016)
-    block_size = min(block_size, len(values))
-    means = []
-    for _ in range(repeats):
-        starts = rng.integers(0, len(values), math.ceil(len(values) / block_size))
-        idx = ((starts[:, None] + np.arange(block_size)) % len(values)).ravel()[:len(values)]
-        means.append(values[idx].mean())
-    return list(np.quantile(means, [0.025, 0.975]))
+    try:
+        return list(block_mean_interval(values, block_size, repeats))
+    except InsufficientBlocksError:
+        return [None, None]
 
 
 def inventory(session):

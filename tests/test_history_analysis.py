@@ -39,7 +39,7 @@ def test_inventory_covers_forward_evidence_and_tables_without_observation_time()
 
 
 def test_block_interval_preserves_constant_and_is_reproducible():
-    assert block_interval(np.full(30, 7.0)) == [7.0, 7.0]
+    assert block_interval(np.full(60, 7.0)) == [7.0, 7.0]
     values = np.arange(40, dtype=float)
     first = block_interval(values, block_size=5)
     assert first == block_interval(values, block_size=5)

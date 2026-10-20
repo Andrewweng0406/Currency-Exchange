@@ -35,14 +35,16 @@ def strategy_cost_sensitivity(strategies):
         for premium in premiums:
             for fee in (0., 50., 100., 200.):
                 extra_cost = item.target_usd * premium + extra_orders * fee
+                low = item.savings_ci_low-extra_cost if pd.notna(item.savings_ci_low) else None
+                high = item.savings_ci_high-extra_cost if pd.notna(item.savings_ci_high) else None
                 rows.append(dict(
                     strategy=item.strategy, target_usd=item.target_usd,
                     assumed_extra_premium_twd_per_usd=premium, fee_twd_per_order=fee,
                     extra_orders=extra_orders, extra_cost_twd=extra_cost,
                     mean_savings_after_cost_twd=item.mean_savings_twd-extra_cost,
-                    savings_ci_low=item.savings_ci_low-extra_cost,
-                    savings_ci_high=item.savings_ci_high-extra_cost,
-                    positive_lower_bound=item.savings_ci_low-extra_cost > 0,
+                    savings_ci_low=low,
+                    savings_ci_high=high,
+                    positive_lower_bound=low is not None and low > 0,
                 ))
     return pd.DataFrame(rows)
 

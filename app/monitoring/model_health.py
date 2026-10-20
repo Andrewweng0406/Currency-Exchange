@@ -94,9 +94,10 @@ def evaluate_matured_predictions(session, windows: tuple[int, ...] = (7, 30, 90,
                     next_origin = observation.label_end
             loss = (sample["prob_up"] - sample["target_up"]) ** 2
             upper_coin = upper_prior = float("nan")
-            if len(sample) >= 2:
-                upper_coin = block_mean_interval(loss - 0.25, max(20, days * 2))[1]
-                upper_prior = block_mean_interval(loss - (sample["prior"] - sample["target_up"]) ** 2, max(20, days * 2))[1]
+            block_size = max(20, days * 2)
+            if len(sample) >= 2 * block_size:
+                upper_coin = block_mean_interval(loss - 0.25, block_size)[1]
+                upper_prior = block_mean_interval(loss - (sample["prior"] - sample["target_up"]) ** 2, block_size)[1]
             metric_values = {"sample_count": float(len(sample)), "effective_sample_count": float(effective_count),
                              "skill_upper_vs_coin": upper_coin, "skill_upper_vs_prior": upper_prior,
                              **cls.__dict__, **reg.__dict__}
@@ -171,7 +172,8 @@ def latest_model_health_summary(session) -> ModelHealthSummary:
     enough = []
     for horizon in ("1d", "5d", "20d"):
         group = next((item for item in key_metrics if item.horizon == horizon), None)
-        if group is None or group.sample_count < 30 or group.effective_sample_count < 10:
+        required_rows = max(30, 2 * max(20, int(horizon.removesuffix("d")) * 2))
+        if group is None or group.sample_count < required_rows or group.effective_sample_count < 10:
             continue
         age = pd.Timestamp.now(tz="UTC") - pd.to_datetime(group.observed_at_utc, utc=True)
         if not pd.Timedelta(0) <= age <= pd.Timedelta(days=7):

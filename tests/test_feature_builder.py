@@ -6,6 +6,31 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 
+def test_future_prices_cannot_change_previously_available_features():
+    import pandas as pd
+    from app.database.schema import ForeignFlow
+
+    engine = create_engine('sqlite://')
+    Base.metadata.create_all(engine)
+    dates = pd.bdate_range('2024-01-02', periods=60, tz='UTC')
+    with Session(engine) as session:
+        def add_rows(start, end, shock):
+            for idx in range(start, end):
+                observed = dates[idx].to_pydatetime()
+                session.add(FxPrice(observed_at_utc=observed, source='cbc_taiwan', pair='USD/TWD',
+                                    close=30+idx*.01+shock))
+                session.add(MarketData(observed_at_utc=observed, source='yahoo_finance', symbol='DXY',
+                                       close=100+idx*.1+shock))
+                session.add(ForeignFlow(observed_at_utc=observed, source='twse', market='TWSE',
+                                        foreign_net_buy_sell_shares=idx+shock))
+            session.commit()
+        add_rows(0, 40, 0)
+        original = build_feature_frame(session, source_policy='official_only')
+        add_rows(40, 60, 1000)
+        rebuilt = build_feature_frame(session, source_policy='official_only')
+    pd.testing.assert_frame_equal(original, rebuilt.iloc[:40].reset_index(drop=True), check_dtype=False)
+
+
 def test_build_feature_frame_from_minimal_data():
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(engine)
