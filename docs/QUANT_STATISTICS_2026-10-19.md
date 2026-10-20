@@ -54,3 +54,11 @@ python scripts/audit_quant_statistics.py \
 187 個測試通過，涵蓋小樣本拒絕、足夠樣本重現性、真正常數資料、平移不變性、少月份策略、短追蹤紀錄、舊快取門檻、缺少區間的成本情境及上述因果性測試。
 
 本次修改的是不確定區間與守門條件，模型參數、特徵規則及預測權重選擇未改。因 uncertainty.py 納入現有協定指紋，正式收集會另建協定批次；先前 9 筆快照與 2 筆到期結果保留並分開評分，不把先前結果重新命名成新批次。這兩筆舊 outcome 仍只對應一個市場事件。
+
+部署 `3d3518f0-7242-4876-a356-ebca2a299c14` 已觀察到 SUCCESS；[程式 commit `75f53ed` 的 CI 通過](https://github.com/Andrewweng0406/Currency-Exchange/actions/runs/39370314395)。正式 Linux 容器以隔離 SQLite、停用排程／LINE／OpenAI 執行，187 個測試全數通過。
+
+新協定為 `e9909ec82387001a3abde003d424420636fdd17aa2816424e7f0d7948c22f3e6`，依真實執行時間收集 10/19 起算的 3 筆新快照，沒有回填發行時間；目前 0 筆到期。舊 `992c4840…` 仍為 6 筆快照／1 筆到期，`fa83f35a…` 仍為 3 筆快照／1 筆到期。合計 12 筆快照、2 筆到期結果，不能當成 12 個獨立交易日。
+
+部署前後逐欄位比對全部 9 筆舊快照與 2 筆舊 outcome，內容完全相同；原有 29 個封存檔 SHA-256 全部相同。新批次另外增加模型／來源／協定封存，總數 34。`/pipeline/status` 完整 JSON 也未改變，本次只執行獨立驗證收集，沒有冒充新的全流程 run。
+
+線上模型建議仍為停用、驗證完整性錯誤為 0；未發送 LINE。證據保存於本機 `data/raw/ops/` 的 `before_statistics_manifest_20261019.json`、`after_statistics_manifest_20261019.json`、`post_statistics_fix_20261019.json`、`statistics_protocol_capture_20261019.log` 與 `statistics_runtime_tests_20261019.log`。
